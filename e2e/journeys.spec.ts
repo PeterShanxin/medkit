@@ -29,6 +29,10 @@ async function openMedicine(page: Page) {
   await page
     .getByRole('button', { name: 'Open Example tablets', exact: true })
     .click();
+  await expect(page).toHaveURL(/\/medicine\/[\da-f-]+$/);
+  await expect(
+    page.getByRole('heading', { name: 'Example tablets', exact: true }),
+  ).toBeVisible();
 }
 
 test('inventory, plan, actual dose, recovery, consultation export, and deletion', async ({
@@ -135,6 +139,9 @@ test('inventory, plan, actual dose, recovery, consultation export, and deletion'
   await page
     .getByRole('button', { name: 'Permanently delete', exact: true })
     .click();
+  await expect(
+    page.getByText('Your local records have been deleted.', { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole('link', { name: 'Cabinet', exact: true }).click();
   await expect(
