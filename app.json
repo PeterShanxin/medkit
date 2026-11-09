@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "MedKit",
+    "slug": "medkit",
+    "version": "0.1.0",
+    "scheme": "medkit",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "allowBackup": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "MedKit"
+    },
+    "plugins": ["expo-router", "expo-sqlite", "expo-font", "expo-sharing"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

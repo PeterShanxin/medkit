@@ -1,0 +1,16 @@
+{
+  "name": "MedKit",
+  "short_name": "MedKit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F8F4",
+  "theme_color": "#315D4A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

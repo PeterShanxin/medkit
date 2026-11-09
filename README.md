@@ -1,35 +1,81 @@
 # MedKit
 
-**AI-native personal medicine cabinet and health timeline.**
+Your medicine cabinet, actual doses, and health history, in one calm space.
 
-MedKit is an independently developed, open-source cross-platform project to manage the medicines you own, medication plans versus doses actually taken, symptom/illness history, and secure interoperability with external AI agents through MCP.
+MedKit is a local-first Expo application for responsive Web, iOS, and Android. The initial implementation works without an account, AI credentials, or a backend. It is a personal recordkeeping application, not a diagnostic or prescribing system.
 
-**Status:** Early development. The app is not implemented yet.
+![MedKit desktop with synthetic sample records](docs/screenshots/today-desktop.png)
 
-## Product
+## What works
 
-- **Today** - current health status, active medications, and recent dose events.
-- **Cabinet** - medicine inventory, ingredients, quantities, and expiry.
-- **History** - linked symptoms, illness episodes, and medication use.
-- **Advisor** - conservative, evidence-grounded informational assistance, with clear uncertainty.
-- **Interoperability** - optional AI providers and permissioned MCP access for compatible clients.
+- Add, edit, search, and archive medicines, including Chinese names and combination ingredients.
+- Manage separate batches, expiry dates, locations, stock thresholds, and intentional stock adjustments.
+- Record scheduled or as-needed plans. Pause, resume, complete, or discontinue a plan.
+- Confirm actual doses, missed or skipped scheduled doses, and corrections. Only explicit consumption changes stock.
+- Track overlapping health episodes, dated symptoms, consultations, reported diagnoses, and recovery in one timeline.
+- Export all records as JSON or a readable consultation summary. Delete local records with confirmation.
+- Use light, dark, and system themes. Explore synthetic examples in a separate database.
+- Review local checks for expiry, duplicate recorded ingredients, incomplete context, and changed formulations.
+- Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
 
-**Design:** Less is more. Let the layout do the explanation. Make the UI professional, minimal, and accessible.
+The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 
-## Roadmap
+## Run locally
 
-1. Local-first iOS, Android, and Web tracking, working without AI or mandatory cloud login.
-2. Structured medication checks, AI provider abstraction, and authenticated read-only MCP capabilities.
-3. Opt-in sync, verified medicine references, reminders, optional sign-in integrations, and carefully controlled write tools.
+Use Node.js 24 and npm. The lockfile is committed.
 
-## License and attribution
+```sh
+npm ci
+npm run web
+```
 
-Released under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE). Third-party components retain their respective licenses.
+For the production Web build, including offline startup:
 
-## Privacy and security
+```sh
+npm run build:web
+npm run preview
+```
 
-The repository is **public**, but personal medical records are **private**. Never commit real health information, API keys, exports, database files, or credentials. Demo and test data must be synthetic. See [SECURITY.md](SECURITY.md).
+Open `http://127.0.0.1:4173`. The preview server binds only to the local machine. Offline use requires a successful first load and a browser that permits service workers and IndexedDB. Development mode does not install the offline shell.
 
-## Medical limitations
+For native development:
 
-MedKit is not a substitute for medical care and is not clinically validated as a diagnosis, prescribing, or drug-interaction service. Decisions about treatment or medicine safety require appropriate verified information and professional guidance.
+```sh
+npm start
+# With the relevant simulator or emulator installed:
+npm run ios
+npm run android
+```
+
+Use an Expo Go or development-build environment compatible with SDK 58. Native JavaScript/Hermes bundles have been exported, but native device behavior has not been verified. Store distribution, signing, application IDs, and releases are not configured.
+
+## Verify
+
+```sh
+npm run verify
+npx playwright install chromium
+npm run test:e2e
+npm run build:native
+npm audit --omit=dev
+```
+
+`verify` runs strict type checking, formatting checks, unit/integration tests, and the Web build. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
+
+See [verification evidence](docs/VERIFICATION.md) and [integration instructions](docs/INTEGRATIONS.md).
+
+## Your records
+
+Web records remain in this browser's IndexedDB. Native records use a local SQLite database. MedKit does not provide application-level encryption, cloud backup, synchronization, or a record-import interface. Browser cleanup or uninstalling the application can remove records. Keep sensitive exports outside this repository.
+
+Deletion removes records from the active local database. It does not securely erase physical storage or recall exports and external-client responses. Demo records are synthetic and use a separate database.
+
+The application sends no health records to a model or remote service. If you configure an external MCP client, that client controls whether it sends returned records to its own provider. Read [security and privacy boundaries](SECURITY.md) first.
+
+## Project information
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Product and reference research](docs/RESEARCH.md)
+- [Agent guide](docs/AGENT_GUIDE.md)
+- [AGPL-3.0 license](LICENSE)
+
+Still outside this milestone: remote HTTPS/OAuth MCP, ChatGPT authorization, live AI adapters, multi-device sync, reminders, packaging photos/OCR, multilingual UI, and native device verification.
