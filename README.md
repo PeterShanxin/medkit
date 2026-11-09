@@ -24,9 +24,7 @@ MedKit is an independently developed, open-source cross-platform project to mana
 
 ## License and attribution
 
-Copyright (C) 2026 Li Shanxin.
-
-Released under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Third-party components retain their respective licenses.
+Released under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE). Third-party components retain their respective licenses.
 
 ## Privacy and security
 
