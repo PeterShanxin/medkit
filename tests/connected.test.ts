@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -308,6 +308,21 @@ describe('connected record integrity', () => {
   });
 });
 
+it('rolls back stock and proposal status when the commit audit fails', async () => {
+  const s = await setup();
+  const p = s.records.propose(s.a.subject, randomUUID(), 'Test', s.input());
+  const spy = vi.spyOn(s.db, 'audit').mockImplementationOnce(() => {
+    throw new Error('Disk write failed');
+  });
+  expect(() => s.records.decide(s.a.subject, p.id, true, () => {})).toThrow(
+    'Disk write failed',
+  );
+  spy.mockRestore();
+  expect(s.db.records(s.a.subject).state.doses).toHaveLength(0);
+  expect(s.db.records(s.a.subject).state.batches[0]!.quantity).toBe(10);
+  expect(s.records.list(s.a.subject)[0]!.status).toBe('pending');
+});
+
 describe('OAuth and HTTP MCP', () => {
   it('exposes discovery, requires authentication and rejects hostile origins and callbacks', async () => {
     const s = await setup();
@@ -577,4 +592,30 @@ describe('OAuth and HTTP MCP', () => {
       }),
     ).toThrow('Sample data');
   });
+});
+
+it('rejects pending requests when their external grant is revoked', async () => {
+  const s = await setup();
+  const token = await s.tokens();
+  const grant = s.oauth.access(token.access_token);
+  const proposal = s.records.propose(
+    s.a.subject,
+    grant.id,
+    grant.clientName,
+    s.input(),
+  );
+  const cookie = await s.login();
+  await s.request(`/api/connections/${grant.id}/revoke`, {}, { cookie });
+  expect(
+    s.records.list(s.a.subject).find((p) => p.id === proposal.id)?.status,
+  ).toBe('rejected');
+  expect(
+    (
+      await s.request(
+        `/api/reviews/${proposal.id}`,
+        { approve: true },
+        { cookie },
+      )
+    ).status,
+  ).toBe(409);
 });

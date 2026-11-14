@@ -131,7 +131,7 @@ function SessionProvider({
   useEffect(
     () =>
       watchConnection(() => {
-        setState(null);
+        setState(emptyState(uuid()));
         setService(null);
         setAttempt((value) => value + 1);
       }),
@@ -182,13 +182,13 @@ function SessionProvider({
             throw new Error('Return to your own records before connecting.');
           const snapshot = upload ? await service.export() : undefined;
           await signInConnection(key, snapshot);
-          setState(null);
+          setState(emptyState(uuid()));
           setService(null);
           setAttempt((value) => value + 1);
         },
         disconnect: async () => {
           await signOutConnection(() => service?.close());
-          setState(null);
+          setState(emptyState(uuid()));
           setService(null);
           setAttempt((value) => value + 1);
         },

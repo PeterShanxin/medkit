@@ -4,9 +4,11 @@ import { ConnectedService, connectionRequest } from './connected-client';
 import { openIndexedDb } from './indexeddb';
 const storageKey = 'medkit-connected-account';
 function subject() {
-  return idSchema.nullable().parse(localStorage.getItem(storageKey));
+  const value = idSchema.nullable().safeParse(localStorage.getItem(storageKey));
+  return value.success ? value.data : null;
 }
 function notify() {
+  if (typeof BroadcastChannel === 'undefined') return;
   const channel = new BroadcastChannel('medkit-connection');
   channel.postMessage('changed');
   channel.close();
@@ -47,6 +49,7 @@ export async function signOutConnection(beforeClear: () => void = () => {}) {
   notify();
 }
 export function watchConnection(changed: () => void) {
+  if (typeof BroadcastChannel === 'undefined') return () => {};
   const channel = new BroadcastChannel('medkit-connection');
   channel.onmessage = changed;
   return () => channel.close();
