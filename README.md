@@ -81,4 +81,4 @@ Local mode sends no health records to a model or remote service. Connected mode 
 - [Agent guide](docs/AGENT_GUIDE.md)
 - [AGPL-3.0 license](LICENSE)
 
-Public Cloudflare hosting and live ChatGPT have been checked with synthetic data in one personal deployment; see the [verification record](docs/VERIFICATION.md). Not yet verified or provided: live GitHub account acceptance, OpenClaw, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.
+Public Cloudflare hosting, GitHub sign-in and live ChatGPT have been checked in one personal deployment without real health data; see the [verification record](docs/VERIFICATION.md). Not yet verified or provided: GitHub sign-in on a second physical device, OpenClaw, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.

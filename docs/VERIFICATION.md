@@ -84,4 +84,13 @@ Executed locally on Windows on 2026-11-15 with synthetic data:
 - All 14 desktop/mobile browser journeys passed, including GitHub login, same-account record readback in two isolated browser contexts, refresh, logout, and return to separate local records.
 - iOS and Android JavaScript/Hermes exports passed. This does not add native account synchronization or establish native device behavior.
 
-GitHub responses in these automated checks are synthetic. Live OAuth App registration, production configuration and actual GitHub sign-in have not yet been verified. Earlier public ChatGPT acceptance above used owner-key login and does not prove the GitHub flow.
+GitHub responses in these automated checks are synthetic. Earlier public ChatGPT acceptance above used owner-key login and does not prove the GitHub flow.
+
+Live acceptance on 2026-11-15 used Microsoft Edge and the same personal Workers Free/D1 deployment. Source `ceb9763` was deployed after applying additive migration `0002_github_login.sql`. The operator configured a user-created OAuth App with an exact callback, no wildcard matching or device flow, and a client secret in Cloudflare Worker secrets.
+
+- GitHub displayed **Public data only**. Actual authorization returned to MedKit with a connected session without entering the owner key.
+- Database metadata confirmed one existing owner, one record aggregate, a session for the original owner subject, zero medicines, and no remaining login intent. No second MedKit account was created.
+- Refresh retained the connected account. Sign-out returned to local mode. A second complete GitHub login succeeded without an access key, followed by final sign-out. The final database check found zero active owner sessions, zero medicines and zero pending login intents.
+- No health data was entered. No AI client was reauthorized. The temporary local copy of the application secret was removed after successful configuration; the original private owner backup was retained.
+
+This was two sequential live sessions in one Edge profile, not a second physical device test. Independent browser contexts are covered by the automated journeys. ChatGPT's full write/confirmation flow was not repeated with GitHub sign-in; the previous live owner-key acceptance remains a separate result. Native synchronization, account recovery and production CPU capacity remain outside this verification.
