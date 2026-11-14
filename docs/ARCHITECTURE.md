@@ -16,7 +16,7 @@ Both stores implement `RecordStore`. IndexedDB serializes read/write transaction
 
 Personal and demo data use separate database names. Each write re-reads current state inside its transaction, avoiding lost updates from concurrent browser tabs. BroadcastChannel refreshes other tabs; native foregrounding refreshes the store. Storage failures do not report success or replace unreadable records.
 
-Schema version 1 is the only supported data format. Unknown versions and invalid references fail closed. A future migration must transform a copy, validate it, and commit atomically with rollback tests. Local stores do not synchronize with each other. The optional connected Web mode uses the server as the authority, as described below. Before adding it, define identities, deletion propagation, idempotency, per-user access rules, and conflict handling for both stock and historical corrections. Do not merge dose arrays or stock counters independently.
+Schema version 1 is the only supported data format. Unknown versions and invalid references fail closed. A future migration must transform a copy, validate it, and commit atomically with rollback tests. Local stores do not synchronize with each other. The optional connected Web mode uses the server as the authority, as described below. Before adding automatic synchronization between local stores, define identities, deletion propagation, idempotency, per-user access rules, and conflict handling for both stock and historical corrections. Do not merge dose arrays or stock counters independently.
 
 The production service worker caches only application assets. Health records stay in the database. A first successful online load is required. The preview server supplies restrictive headers; another host must supply equivalent headers, HTTPS, and SPA fallback routing. No deployment is configured. The optional server supplies the Web shell and equivalent headers.
 
@@ -30,7 +30,7 @@ The provider interface accepts checked facts and permits only their ordering. It
 
 ## Dependencies
 
-Expo SDK 58, React Native 0.88, React 19.3, and Expo Router provide the shared app. Zod validates boundaries; SQLite and IndexedDB provide native and Web persistence. The MCP SDK is isolated from client bundles. Font files ship with the application. Vitest, fake-indexeddb, and Playwright cover domain, storage, and browser behavior.
+Expo SDK 58, React Native 0.88, React 19.3, and Expo Router provide the shared app. Zod validates boundaries; SQLite and IndexedDB provide native and Web persistence. The MCP SDK and Express are isolated from client bundles. The optional server uses Node’s built-in SQLite module. Font files ship with the application. Vitest, fake-indexeddb, and Playwright cover domain, storage, and browser behavior.
 
 Scoped npm overrides pin Expo's build-tool dependencies to `glob` 14.0.2 and `minimatch` 11.0.1 to address GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249. These are deliberate major-version overrides, verified with the project checks and bundle exports. Remove them when upstream dependency ranges include patched versions. Re-run build and compatibility checks when changing them.
 

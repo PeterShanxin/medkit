@@ -68,7 +68,7 @@ See [verification evidence](docs/VERIFICATION.md) and [integration instructions]
 
 By default, Web records remain in this browser's IndexedDB and native records use local SQLite. The optional connected Web mode stores records on your configured server and downloads a separate offline copy. Uploading local records requires explicit selection and an empty connected account. Connected writes require a network connection; native databases and separate local Web records are not synchronized. MedKit does not provide application-level database encryption or managed backups. Browser cleanup or uninstalling the application can remove records. Keep sensitive exports outside this repository.
 
-Deletion removes records from the active local database. It does not securely erase physical storage or recall exports and external-client responses. Demo records are synthetic and use a separate database.
+Local deletion removes records from the active local database. It does not securely erase physical storage or recall exports and external-client responses. Demo records are synthetic and use a separate database.
 
 Local mode sends no health records to a model or remote service. Connected mode sends records to the server you sign in to. If you configure an external MCP client, that client controls whether it sends returned records to its own provider. Read [security and privacy boundaries](SECURITY.md) first.
 

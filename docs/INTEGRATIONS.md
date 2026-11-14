@@ -50,7 +50,7 @@ Revocation cannot recall responses already returned. Deleting records in the app
 
 - **Tested:** the official TypeScript MCP SDK client starts the real stdio process, searches synthetic records, and receives a denial after revocation. Scope and cross-user token tests also run in `npm test`.
 - **OpenClaw:** its [MCP documentation](https://docs.openclaw.ai/tools/mcp) supports stdio entries under `mcp.servers`. Use the process settings above and its connection probe. This application has not been connected to a live OpenClaw instance.
-- **ChatGPT custom MCP connections:** no remote server is deployed. The stdio adapter is not a ChatGPT remote connector. A working connection needs an explicitly authorized data path plus HTTPS transport, standards-compatible OAuth, identity isolation, scope enforcement, revocation, and remote audit coverage. Do not publish the local grant adapter as an unauthenticated HTTP endpoint.
+- **ChatGPT custom MCP connections:** no remote server is deployed. The stdio adapter is not a ChatGPT remote connector. The optional [connected server](#connected-web-and-http-mcp) implements the shared data path, OAuth, permission checks, and confirmed changes. It still needs HTTPS hosting and validation with the intended client. Do not publish the local grant adapter as an unauthenticated HTTP endpoint.
 
 ## Built-in AI and Sign in with ChatGPT
 

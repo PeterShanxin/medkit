@@ -41,4 +41,6 @@ Executed on 2026-11-14 with synthetic records only:
 - `npm audit --omit=dev` reported no vulnerabilities at the time of the check.
 - 10 browser journeys passed at desktop and mobile sizes, including the connected flow in light and dark themes. Browser checks ran in an isolated Windows checkout with Chrome because this container blocks Chromium's singleton sockets. No personal browser profile or health data was used.
 
+Visual evidence: [desktop confirmation](screenshots/connected-review-desktop.png) and [mobile dark confirmation](screenshots/connected-review-mobile.png). Both were inspected after the final browser run.
+
 A synthetic SDK client completes authorization, prepares a dose, waits for browser confirmation, reads the saved dose, and receives a denial after revocation. It is not a live ChatGPT or OpenClaw session. Public HTTPS hosting, real-client OAuth compatibility, and ChatGPT Android behavior remain unverified.
