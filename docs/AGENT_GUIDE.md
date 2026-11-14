@@ -10,14 +10,14 @@ Read [coding standards](CODING_STANDARDS.md), [writing guidance](WRITING_GUIDE.m
 - `src/storage/`: IndexedDB on Web; SQLite on iOS and Android.
 - `src/ui/`: reusable controls, forms, and feature screens.
 - `integrations/`: optional provider, read-only stdio MCP, and connected HTTP server. Read [integration boundaries](INTEGRATIONS.md) before changing authorization or write tools.
-- `src/application/connected/`: change requests and human review contracts. Server and UI must reuse domain transitions. The optional `render.yaml` template and [deployment guide](DEPLOYMENT.md) describe hosting setup; no live environment is implied.
+- `src/application/connected/`: change requests and human review contracts. Server and UI must reuse domain transitions. `integrations/cloudflare/` and the [deployment guide](DEPLOYMENT.md) own Workers/D1 hosting. No live environment is implied.
 - `tests/` and `e2e/`: domain, integration, and browser verification.
 
 ## Working method
 
 Inspect the working tree first. Preserve unrelated changes. Make focused commits. Keep the license intact. Do not commit health records, credentials, exports, or private databases. Use synthetic fixtures.
 
-Use the scripts in `package.json` as the command authority. Keep `npm run verify` aligned with CI. Run browser journeys with `npm run test:e2e`. Report native build and device checks separately from browser checks. An adapter test is not proof of a real external client connection.
+Use the scripts in `package.json` as the command authority. Connected database calls are asynchronous. Keep authorization and record changes inside one `Database.atomic` callback; send responses only after commit. Do not perform external side effects in retryable callbacks. Keep `npm run verify` aligned with CI. Run browser journeys with `npm run test:e2e`. Report native build and device checks separately from browser checks. An adapter test is not proof of a real external client connection.
 
 Update the README when supported behavior or setup changes. Update architecture documentation when boundaries change. Keep root agent entry files pointer-only. Link to existing policies instead of duplicating them. Do not save task prompts or session notes as project guidance.
 

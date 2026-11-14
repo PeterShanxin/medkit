@@ -17,17 +17,57 @@ export function hasConnection() {
   return !!subject();
 }
 export async function restoreConnection() {
-  const id = subject();
+  let id = subject();
+  const url = new URL(window.location.href);
+  // Only the connection page adopts an OAuth cookie; local/offline startup stays local.
+  if (
+    url.pathname === '/connections' &&
+    (!id || url.searchParams.get('signin') === 'github')
+  ) {
+    try {
+      const session = z
+        .object({ subject: idSchema })
+        .parse(await connectionRequest('session'));
+      if (id && id !== session.subject) {
+        const previous = await openIndexedDb(`medkit-connected-${id}`);
+        await previous.clear();
+        previous.close();
+      }
+      id = session.subject;
+      localStorage.setItem(storageKey, id);
+      url.searchParams.delete('signin');
+      window.history.replaceState(null, '', url.pathname + url.search);
+      notify();
+    } catch {
+      if (url.searchParams.get('signin') === 'github')
+        throw new Error(
+          'GitHub sign-in could not be opened. Try signing in again.',
+        );
+    }
+  }
   return id
     ? new ConnectedService(await openIndexedDb(`medkit-connected-${id}`), id)
     : null;
+}
+export async function startGitHubSignIn(returnTo = '/connections') {
+  const result = z
+    .object({ authorizationUrl: z.string().url() })
+    .parse(await connectionRequest('login/github', { returnTo }));
+  const url = new URL(result.authorizationUrl);
+  if (
+    url.origin !== 'https://github.com' ||
+    url.pathname !== '/login/oauth/authorize'
+  )
+    throw new Error('The sign-in address is invalid.');
+  window.location.assign(url.href);
 }
 export async function signInConnection(key: string, snapshot?: string) {
   const session = z
     .object({ subject: idSchema })
     .parse(await connectionRequest('login', { key }));
   try {
-    if (snapshot) await connectionRequest('import', JSON.parse(snapshot));
+    if (snapshot)
+      await connectionRequest('import', JSON.parse(snapshot), session.subject);
     localStorage.setItem(storageKey, session.subject);
     notify();
   } catch (error) {

@@ -62,7 +62,7 @@ MedKit has no registered OAuth client, tested sign-in flow, or model inference i
 
 ## Connected Web and HTTP MCP
 
-The optional Node server hosts the Web app and a Streamable HTTP MCP endpoint at `/mcp`. Connected Web sessions and MCP read the same server records. It adds `prepare_record_change` and `get_record_change_status` to the nine read tools. The local stdio adapter remains read-only.
+The optional Node server or Cloudflare Worker hosts the Web app and a Streamable HTTP MCP endpoint at `/mcp`. Connected Web sessions and MCP read the same server records. It adds `prepare_record_change` and `get_record_change_status` to the nine read tools. The local stdio adapter remains read-only.
 
 A prepared change is **not a saved medical record**. The server returns a review URL. The owner opens that URL in MedKit, checks every field, and selects **Confirm and save**. MCP tokens cannot call the owner confirmation API. Connected forms retain the displayed record version. A background refresh cannot silently rebase an open edit. If a save response is lost, retry checks the original submission without creating new record IDs; the error explains that later edits are not sent. Requests expire after ten minutes and require a fresh review after any intervening record change. A stable request ID prevents duplicate preparations; repeated approval does not apply a second stock deduction. Corrections preserve the original dose and return stock only when explicitly requested.
 
@@ -70,7 +70,7 @@ Supported changes: add medicine with its first batch, add another batch, record 
 
 ### Run a private connected server
 
-Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and one server process. Ephemeral/serverless filesystems are not supported. A [Render deployment template](DEPLOYMENT.md) is available. No hosting service, public endpoint, backups, or live ChatGPT connection is provisioned by this repository.
+Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and one server process. Node SQLite needs a persistent filesystem. For serverless hosting, use the [Workers + D1 adapter](DEPLOYMENT.md). No hosting service, public endpoint, backups, or live ChatGPT connection is provisioned by this repository.
 
 1. Build with `npm ci` and `npm run build:web`.
 2. Set `MEDKIT_DATABASE` to an absolute file path **outside the checkout**, in an owner-only directory. On Windows, protect the directory with account ACLs; Unix mode bits do not configure Windows ACLs.
@@ -94,6 +94,16 @@ Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and o
 For local synthetic testing only, `MEDKIT_BASE_URL=http://127.0.0.1:4174` permits HTTP on loopback. Exact loopback OAuth callbacks are allowed in this mode. Public HTTP origins and wildcard callbacks are rejected.
 
 The server has no account recovery UI or key-rotation command. Protect the owner key and database together. Stop the server and back up the private database directory, including any SQLite WAL files, before upgrades. Test restoration privately. Unknown database schema versions fail closed. Do not store this database on a shared network filesystem.
+
+### GitHub owner sign-in
+
+An administrator can enable [GitHub sign-in and invited accounts](DEPLOYMENT.md#optional-github-sign-in). GitHub identifies the owner; it does not grant AI access. A signed-out MCP consent page offers GitHub sign-in and returns to the same consent request. Read/write consent and independent owner confirmation still apply. Login requests expire after ten minutes; restart an expired connection from the AI client. Provisioned owner keys remain a backup; invited users sign in through GitHub. Public signup and native synchronization are not added.
+
+Consent forms bind approval to the displayed session or signed-out key flow. If another tab signs in, switches accounts, or ends that session before approval, restart the connection instead of submitting the stale form. The HTTP MCP server audits successful authorized tool operations with their account and grant. Rejected authentication and failed tool calls do not create anonymous database audit rows; public invalid traffic must not consume D1 write quota through auditing. Edge request limits still apply. The local stdio adapter's file audit remains separate.
+
+### Find the connection guide in MedKit
+
+Open **Settings → Use MedKit with ChatGPT**, or the app guide link in **Connections**. `/integrations` explains sign-in, plugin connection, per-message selection, examples, review links and revocation. It opens the ChatGPT plugin directory; it does not claim to install or publicly list MedKit. An invitation to this MedKit deployment is separate from plugin availability in the user's ChatGPT account/workspace. Hosts must arrange that availability and exact OAuth client callbacks. The expandable connection details also show the current server's MCP endpoint without exposing any credentials.
 
 ### Authorize an AI client
 

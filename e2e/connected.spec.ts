@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Express } from 'express';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Database } from '../integrations/server/database';
+import { openDatabase } from '../integrations/server/sqlite';
 import { createServerApp } from '../integrations/server/app';
 import { connectionScopes } from '../src/application/connected/contracts';
 import { fixture, now, medicineInput } from '../tests/fixtures';
@@ -27,7 +27,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
     callbackServer.listen(0, '127.0.0.1', resolve),
   );
   const callback = `http://127.0.0.1:${(callbackServer.address() as { port: number }).port}/callback`;
-  const db = new Database(':memory:');
+  const db = openDatabase(':memory:');
   let app: Express;
   const listener = createServer((req, res) => app(req, res));
   await new Promise<void>((resolve) =>
@@ -47,9 +47,9 @@ test('connected medicine record, human review, reload, offline cache and revocat
     ],
   });
   app = services.app;
-  const account = services.identity.provision();
+  const account = await services.identity.provision();
   const data = fixture();
-  services.records.import(account.subject, {
+  await services.records.import(account.subject, {
     format: 'medkit',
     exportedAt: now,
     state: data.state,
@@ -171,8 +171,10 @@ test('connected medicine record, human review, reload, offline cache and revocat
     await expect(
       client.callTool({ name: 'get_recent_doses', arguments: {} }),
     ).rejects.toThrow();
-    expect(db.records(account.subject).state.doses).toHaveLength(1);
-    expect(db.records(account.subject).state.batches[0]!.quantity).toBe(9);
+    expect((await db.records(account.subject)).state.doses).toHaveLength(1);
+    expect((await db.records(account.subject)).state.batches[0]!.quantity).toBe(
+      9,
+    );
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(
       page.getByText('On this device', { exact: true }),
@@ -192,7 +194,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
 test('connected forms recover a lost response and reject edits from an older version', async ({
   page,
 }) => {
-  const db = new Database(':memory:');
+  const db = openDatabase(':memory:');
   let app: Express;
   const listener = createServer((req, res) => app(req, res));
   await new Promise<void>((resolve) =>
@@ -206,9 +208,9 @@ test('connected forms recover a lost response and reject edits from an older ver
     clients: [],
   });
   app = services.app;
-  const account = services.identity.provision();
+  const account = await services.identity.provision();
   const data = fixture();
-  services.records.import(account.subject, {
+  await services.records.import(account.subject, {
     format: 'medkit',
     exportedAt: now,
     state: data.state,
@@ -241,14 +243,16 @@ test('connected forms recover a lost response and reject edits from an older ver
       .getByRole('button', { name: 'Confirm dose taken', exact: true })
       .click();
     await expect(page.getByText(/Save status is unknown/)).toBeVisible();
-    expect(db.records(account.subject).state.batches[0]!.quantity).toBe(9);
+    expect((await db.records(account.subject)).state.batches[0]!.quantity).toBe(
+      9,
+    );
     await page
       .getByRole('button', { name: 'Confirm dose taken', exact: true })
       .click();
     await expect(page.getByText(/Save status is unknown/)).toHaveCount(0);
     expect(payloads).toHaveLength(2);
     expect(payloads[1]).toEqual(payloads[0]);
-    expect(db.records(account.subject).state.doses).toHaveLength(1);
+    expect((await db.records(account.subject)).state.doses).toHaveLength(1);
     await page.unroute(base + '/api/records');
 
     await page
@@ -257,8 +261,8 @@ test('connected forms recover a lost response and reject edits from an older ver
     await page
       .getByLabel('Generic or Chinese name (optional)')
       .fill('My stale edit');
-    const current = db.records(account.subject);
-    services.records.execute(account.subject, {
+    const current = await db.records(account.subject);
+    await services.records.execute(account.subject, {
       operationId: randomUUID(),
       version: current.version,
       commands: [
@@ -289,9 +293,9 @@ test('connected forms recover a lost response and reject edits from an older ver
     await expect(
       page.getByText('Records changed. Refresh and review the change again.'),
     ).toBeVisible();
-    expect(db.records(account.subject).state.medicines[0]!.genericName).toBe(
-      'Corrected on another device',
-    );
+    expect(
+      (await db.records(account.subject)).state.medicines[0]!.genericName,
+    ).toBe('Corrected on another device');
   } finally {
     await new Promise<void>((resolve) => listener.close(() => resolve()));
     db.close();

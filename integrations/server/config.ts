@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { configuredClientSchema } from './oauth';
+import { githubConfig } from './github-login';
 
 export function serverConfig(env: Record<string, string | undefined>) {
-  const baseUrl = env.MEDKIT_BASE_URL ?? env.RENDER_EXTERNAL_URL;
+  const baseUrl = env.MEDKIT_BASE_URL;
   if (!baseUrl)
     throw new Error('Set MEDKIT_BASE_URL to the public HTTPS origin.');
   const file = env.MEDKIT_OAUTH_CLIENTS;
@@ -15,9 +16,11 @@ export function serverConfig(env: Record<string, string | undefined>) {
   const clients = z
     .array(configuredClientSchema)
     .parse(JSON.parse(file === undefined ? json! : readFileSync(file, 'utf8')));
+  const github = githubConfig(env);
   return {
     baseUrl,
     clients,
+    ...(github ? { github } : {}),
     host: z
       .enum(['127.0.0.1', '0.0.0.0'])
       .parse(env.MEDKIT_BIND_HOST ?? '127.0.0.1'),

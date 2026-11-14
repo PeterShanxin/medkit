@@ -17,9 +17,13 @@ MedKit is a local-first Expo application for responsive Web, iOS, and Android. T
 - Use light, dark, and system themes. Explore synthetic examples in a separate database.
 - Review local checks for expiry, duplicate recorded ingredients, incomplete context, and changed formulations.
 - Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
-- Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. See [server setup](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
+- Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. Deploy on [Cloudflare Workers + D1](docs/DEPLOYMENT.md), or use the [local Node server](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
+
+Optional [GitHub sign-in](docs/DEPLOYMENT.md#optional-github-sign-in) opens the same connected account on another device. Hosts can invite GitHub users from **Settings → Invite people**. Each invited person gets a separate empty account on first sign-in. The separate **Use MedKit with ChatGPT** guide explains plugin access, permissions and confirmed changes. Local mode and existing backup keys remain available. Public signup is not enabled; MedKit is not listed in the public ChatGPT plugin directory.
 
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
+
+Simpler ChatGPT plugin installation for invited users on independent personal accounts is deferred in [issue #5](https://github.com/PeterShanxin/medkit/issues/5).
 
 ## Run locally
 
@@ -60,7 +64,7 @@ npm run build:native
 npm audit --omit=dev
 ```
 
-`verify` runs strict type checking, formatting checks, unit/integration tests, and the Web build. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
+`verify` runs strict type checking, formatting checks, unit/integration tests, the Web build, and compiled Worker/D1 integration tests. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
 
 See [verification evidence](docs/VERIFICATION.md), [integration instructions](docs/INTEGRATIONS.md), and the [cloud deployment guide](docs/DEPLOYMENT.md).
 
@@ -79,4 +83,4 @@ Local mode sends no health records to a model or remote service. Connected mode 
 - [Agent guide](docs/AGENT_GUIDE.md)
 - [AGPL-3.0 license](LICENSE)
 
-Not yet verified or provided: production hosting, a live ChatGPT/OpenClaw connection, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.
+Public Cloudflare hosting, GitHub sign-in and live ChatGPT have been checked in one personal deployment without real health data; see the [verification record](docs/VERIFICATION.md). Not yet verified or provided: GitHub sign-in on a second physical device, OpenClaw, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.

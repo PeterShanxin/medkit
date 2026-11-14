@@ -116,16 +116,8 @@ export class OAuth implements OAuthServerProvider {
       throw new InvalidScopeError('Unsupported MedKit permission.');
     if (!client.redirect_uris.includes(params.redirectUri))
       throw new InvalidRequestError('Unregistered callback.');
-    this.db.removeWhere(
-      'oauth-pending',
-      (value) => pendingSchema.parse(value).expiresAt <= this.now(),
-    );
-    this.db.removeWhere(
-      'oauth-codes',
-      (value) => codeSchema.parse(value).expiresAt <= this.now(),
-    );
     const request = secret();
-    this.db.put(
+    await this.db.put(
       'oauth-pending',
       hash(request),
       pendingSchema.parse({
@@ -137,8 +129,12 @@ export class OAuth implements OAuthServerProvider {
     );
     res.redirect(`/connect/consent?request=${encodeURIComponent(request)}`);
   }
-  pending(request: string) {
-    const pending = this.db.get('oauth-pending', hash(request), pendingSchema);
+  async pending(request: string) {
+    const pending = await this.db.get(
+      'oauth-pending',
+      hash(request),
+      pendingSchema,
+    );
     if (!pending || pending.expiresAt <= this.now())
       throw new RequestError(
         400,
@@ -151,9 +147,14 @@ export class OAuth implements OAuthServerProvider {
         pending.clientId,
     };
   }
-  consent(request: string, subject: string, allowWrite: boolean, deny = false) {
-    return this.db.atomic(() => {
-      const pending = this.pending(request);
+  async consent(
+    request: string,
+    subject: string,
+    allowWrite: boolean,
+    deny = false,
+  ) {
+    return await this.db.atomic(async () => {
+      const pending = await this.pending(request);
       const callback = new URL(pending.redirectUri);
       if (pending.state) callback.searchParams.set('state', pending.state);
       if (deny) callback.searchParams.set('error', 'access_denied');
@@ -167,7 +168,7 @@ export class OAuth implements OAuthServerProvider {
             400,
             'Select an available permission or deny access.',
           );
-        this.db.put(
+        await this.db.put(
           'oauth-codes',
           hash(code),
           codeSchema.parse({
@@ -179,12 +180,12 @@ export class OAuth implements OAuthServerProvider {
         );
         callback.searchParams.set('code', code);
       }
-      this.db.delete('oauth-pending', hash(request));
+      await this.db.delete('oauth-pending', hash(request));
       return callback.href;
     });
   }
-  private code(client: OAuthClientInformationFull, code: string) {
-    const value = this.db.get('oauth-codes', hash(code), codeSchema);
+  private async code(client: OAuthClientInformationFull, code: string) {
+    const value = await this.db.get('oauth-codes', hash(code), codeSchema);
     if (
       !value ||
       value.clientId !== client.client_id ||
@@ -197,7 +198,7 @@ export class OAuth implements OAuthServerProvider {
     client: OAuthClientInformationFull,
     code: string,
   ) {
-    return this.code(client, code).codeChallenge;
+    return (await this.code(client, code)).codeChallenge;
   }
   async exchangeAuthorizationCode(
     client: OAuthClientInformationFull,
@@ -207,8 +208,8 @@ export class OAuth implements OAuthServerProvider {
     resource?: URL,
   ) {
     this.checkResource(resource);
-    return this.db.atomic(() => {
-      const value = this.code(client, code);
+    return await this.db.atomic(async () => {
+      const value = await this.code(client, code);
       // The SDK validates PKCE before calling this method and omits the verifier after success.
       if (
         (verifier !== undefined &&
@@ -226,14 +227,19 @@ export class OAuth implements OAuthServerProvider {
         expiresAt: this.now() + 30 * 24 * 60 * 60_000,
         revoked: false,
       };
-      this.db.put('oauth-grants', grant.id, grant);
-      this.db.delete('oauth-codes', hash(code));
-      this.db.audit(grant.subject, 'connection.authorize', grant.id, 'allowed');
-      return this.tokens(grant, grant.scopes);
+      await this.db.put('oauth-grants', grant.id, grant);
+      await this.db.delete('oauth-codes', hash(code));
+      await this.db.audit(
+        grant.subject,
+        'connection.authorize',
+        grant.id,
+        'allowed',
+      );
+      return await this.tokens(grant, grant.scopes);
     });
   }
-  grant(id: string): RemoteGrant {
-    const value = this.db.get('oauth-grants', id, grantSchema);
+  async grant(id: string): Promise<RemoteGrant> {
+    const value = await this.db.get('oauth-grants', id, grantSchema);
     if (
       !value ||
       value.revoked ||
@@ -243,15 +249,7 @@ export class OAuth implements OAuthServerProvider {
       throw new InvalidTokenError('Connection expired or revoked.');
     return value;
   }
-  private tokens(grant: RemoteGrant, scopes: ConnectionScope[]) {
-    this.db.removeWhere(
-      'oauth-access',
-      (value) => tokenSchema.parse(value).expiresAt <= this.now(),
-    );
-    this.db.removeWhere(
-      'oauth-refresh',
-      (value) => tokenSchema.parse(value).expiresAt <= this.now(),
-    );
+  private async tokens(grant: RemoteGrant, scopes: ConnectionScope[]) {
     const access = secret(),
       refresh = secret();
     const common = {
@@ -261,11 +259,11 @@ export class OAuth implements OAuthServerProvider {
       scopes,
       used: false,
     };
-    this.db.put('oauth-access', hash(access), {
+    await this.db.put('oauth-access', hash(access), {
       ...common,
       expiresAt: Math.min(grant.expiresAt, this.now() + 15 * 60_000),
     });
-    this.db.put('oauth-refresh', hash(refresh), {
+    await this.db.put('oauth-refresh', hash(refresh), {
       ...common,
       expiresAt: grant.expiresAt,
     });
@@ -287,38 +285,49 @@ export class OAuth implements OAuthServerProvider {
     resource?: URL,
   ) {
     this.checkResource(resource);
-    // Persist replay revocation even when the exchange returns an error.
-    const previous = this.db.get('oauth-refresh', hash(token), tokenSchema);
-    if (
-      !previous ||
-      previous.clientId !== client.client_id ||
-      previous.expiresAt <= this.now()
-    )
-      throw new InvalidGrantError('Invalid refresh token.');
-    if (previous.used) {
-      this.revoke(previous.grantId);
-      throw new InvalidGrantError('Refresh token was already used. Reconnect.');
-    }
-    return this.db.atomic(() => {
-      const grant = this.grant(previous.grantId);
+    // Return a replay marker so revocation commits before the OAuth error is thrown.
+    const result = await this.db.atomic(async () => {
+      const previous = await this.db.get(
+        'oauth-refresh',
+        hash(token),
+        tokenSchema,
+      );
+      if (
+        !previous ||
+        previous.clientId !== client.client_id ||
+        previous.expiresAt <= this.now()
+      )
+        throw new InvalidGrantError('Invalid refresh token.');
+      if (previous.used) {
+        await this.revoke(previous.grantId);
+        return null;
+      }
+      const grant = await this.grant(previous.grantId);
       const requested = scopes?.length ? scopes : previous.scopes;
       if (
         requested.some((s) => !previous.scopes.includes(s as ConnectionScope))
       )
         throw new InvalidScopeError('Refresh cannot add permissions.');
-      this.db.put('oauth-refresh', hash(token), { ...previous, used: true });
+      await this.db.put('oauth-refresh', hash(token), {
+        ...previous,
+        used: true,
+      });
       return this.tokens(grant, requested as ConnectionScope[]);
     });
+    if (!result)
+      throw new InvalidGrantError('Refresh token was already used. Reconnect.');
+    return result;
   }
-  access(token: string, required: ConnectionScope[] = []) {
-    const value = this.db.get('oauth-access', hash(token), tokenSchema);
+
+  async access(token: string, required: ConnectionScope[] = []) {
+    const value = await this.db.get('oauth-access', hash(token), tokenSchema);
     if (
       !value ||
       value.expiresAt <= this.now() ||
       value.resource !== this.resource.href
     )
       throw new InvalidTokenError('Invalid access token.');
-    const grant = this.grant(value.grantId);
+    const grant = await this.grant(value.grantId);
     if (required.some((s) => !value.scopes.includes(s)))
       throw new InvalidScopeError(
         'This connection does not have the required permission.',
@@ -326,7 +335,7 @@ export class OAuth implements OAuthServerProvider {
     return { ...grant, scopes: value.scopes, tokenExpiresAt: value.expiresAt };
   }
   async verifyAccessToken(token: string) {
-    const grant = this.access(token);
+    const grant = await this.access(token);
     return {
       token,
       clientId: grant.clientId,
@@ -336,25 +345,24 @@ export class OAuth implements OAuthServerProvider {
       extra: { subject: grant.subject, grantId: grant.id },
     };
   }
-  revoke(id: string, subject?: string) {
-    const grant = this.db.get('oauth-grants', id, grantSchema);
+  async revoke(id: string, subject?: string) {
+    const grant = await this.db.get('oauth-grants', id, grantSchema);
     if (!grant || (subject && grant.subject !== subject))
       throw new RequestError(404, 'This connection is unavailable.');
-    this.db.put('oauth-grants', id, { ...grant, revoked: true });
+    await this.db.put('oauth-grants', id, { ...grant, revoked: true });
   }
-  revokeAll(subject: string) {
-    this.db.atomic(() => {
-      this.db.removeWhere(
+  async revokeAll(subject: string) {
+    await this.db.atomic(async () => {
+      await this.db.removeWhere(
         'oauth-codes',
         (value) => codeSchema.parse(value).subject === subject,
       );
-      for (const g of this.db.list('oauth-grants', grantSchema))
-        if (g.subject === subject) this.revoke(g.id, subject);
+      for (const g of await this.db.list('oauth-grants', grantSchema))
+        if (g.subject === subject) await this.revoke(g.id, subject);
     });
   }
-  list(subject: string) {
-    return this.db
-      .list('oauth-grants', grantSchema)
+  async list(subject: string) {
+    return (await this.db.list('oauth-grants', grantSchema))
       .filter(
         (g) => g.subject === subject && !g.revoked && g.expiresAt > this.now(),
       )
@@ -370,8 +378,8 @@ export class OAuth implements OAuthServerProvider {
     request: OAuthTokenRevocationRequest,
   ) {
     const token =
-      this.db.get('oauth-access', hash(request.token), tokenSchema) ??
-      this.db.get('oauth-refresh', hash(request.token), tokenSchema);
-    if (token?.clientId === client.client_id) this.revoke(token.grantId);
+      (await this.db.get('oauth-access', hash(request.token), tokenSchema)) ??
+      (await this.db.get('oauth-refresh', hash(request.token), tokenSchema));
+    if (token?.clientId === client.client_id) await this.revoke(token.grantId);
   }
 }

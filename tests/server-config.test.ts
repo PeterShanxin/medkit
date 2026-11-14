@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest';
 import { serverConfig } from '../integrations/server/config';
 
-it('uses the managed HTTPS address and supports an initially empty client allowlist', () => {
+it('uses the configured HTTPS address and supports an initially empty client allowlist', () => {
   expect(
     serverConfig({
-      RENDER_EXTERNAL_URL: 'https://synthetic.example',
+      MEDKIT_BASE_URL: 'https://synthetic.example',
       MEDKIT_OAUTH_CLIENTS_JSON: '[]',
       MEDKIT_BIND_HOST: '0.0.0.0',
       PORT: '10000',
@@ -16,11 +16,10 @@ it('uses the managed HTTPS address and supports an initially empty client allowl
     port: 10000,
   });
 });
-it('keeps loopback binding by default and lets an explicit origin override the provider address', () => {
+it('keeps loopback binding by default', () => {
   expect(
     serverConfig({
       MEDKIT_BASE_URL: 'https://owner.example',
-      RENDER_EXTERNAL_URL: 'https://synthetic.example',
       MEDKIT_OAUTH_CLIENTS_JSON: '[]',
     }),
   ).toMatchObject({

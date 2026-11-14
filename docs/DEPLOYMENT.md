@@ -1,62 +1,82 @@
-# Connected Web hosting
+# Cloudflare Workers + D1
 
-The [Render Blueprint](../render.yaml) prepares one Node service in Singapore with a 1 GB persistent disk. Applying it creates paid resources. No service is created by committing this file. Public hosting and live ChatGPT authorization have not been verified.
+The Worker serves the Web app, OAuth, and HTTP MCP. D1 stores connected accounts. The local-first app still works without this deployment. No personal records are uploaded during setup.
 
-## Create the service
+## Local verification
 
-1. In your own Render account, create a Blueprint from `PeterShanxin/medkit`, branch `main`, file `render.yaml`.
-2. Review the selected compute plan and disk price before applying. The template uses `0.5c-512mb` and a 1 GB disk. [Current pricing](https://render.com/pricing) determines the bill.
-3. Enter `[]` for `MEDKIT_OAUTH_CLIENTS_JSON` initially. This allows the Web app to start without accepting any OAuth clients. Do not put an owner access key in this field.
-4. Apply the Blueprint. The build installs dependencies and exports the Web app. Render supplies HTTPS and `RENDER_EXTERNAL_URL`; the server uses that exact origin. Do not add a custom domain during initial setup.
-5. In the service's **Shell**, run `npm run server:account` once. Save the printed owner access key in your password manager. This command creates an account each time. Do not run it in a build command, deployment hook, or conversation with an AI.
-6. Open the service URL, go to **Settings → Manage connections**, and enter the key. Keep local records separate during synthetic testing.
+Use the Node version in `package.json`. Run from the repository root:
 
-The service listens on `0.0.0.0` only because Render's HTTPS proxy must reach it. Outside a managed proxy network, keep the default loopback binding or restrict the backend port with a firewall. Application Host/Origin validation, Secure cookies, and OAuth authentication still apply. No public account-creation API exists.
+```sh
+npm ci
+npm run build:web
+npm run worker:migrate
+npm run worker:account -- --output /absolute/private/medkit-local-owner.json
+npm run worker:dev
+```
 
-Commit-triggered service deployments and previews are disabled. In the Blueprint Settings, also set **Auto Sync → No**; Blueprint synchronization is a separate setting. Deploy reviewed commits manually after CI passes. Run one instance: the SQLite database and its WAL files live under `/var/data/medkit`, outside the checkout. Never remove or replace this disk to resolve a failed deployment. A disk-backed deployment has a brief outage during replacement.
+Create the private output directory first. The account command creates a new account each time. It saves the owner key to the requested file and never prints it. Unix mode 0600 does not set Windows ACLs; protect that directory with your OS account permissions. Open `http://127.0.0.1:8787`, then **Settings → Manage connections**. Enter the key yourself. Never give it to an AI client.
 
-## Connect ChatGPT
+Local D1 lives in the ignored `.wrangler/` directory. Use synthetic records there. `npm run test:workers` runs the compiled Worker and D1 in workerd through Miniflare; build the Web app first. `npm run verify` includes that build and test sequence. These tests need no Cloudflare login.
 
-Use a ChatGPT surface that supports a custom remote MCP connection and pre-registered public OAuth clients. Availability depends on the account and surface; Android has not been verified. Follow the [official authentication guide](https://developers.openai.com/plugins/build/auth).
+## Deploy to your account
 
-1. Start custom connection setup with `https://YOUR-SERVICE.onrender.com/mcp` and OAuth. Obtain the **exact callback URL shown for this connection**. This server does not advertise issuer-response support; do not substitute an assumed universal callback.
-2. In Render, update `MEDKIT_OAUTH_CLIENTS_JSON` with one public client:
+1. Run `npx wrangler login`, then `npx wrangler whoami`. Use your own Cloudflare account. Do not paste an API token into a conversation.
+2. In that account, enable Workers Free and choose your `workers.dev` subdomain. Create D1 with `npx wrangler d1 create medkit --location apac`. The location hint is not a Singapore data-residency guarantee.
+3. Copy `wrangler.jsonc` to the ignored `wrangler.production.jsonc`. Keep it valid JSON. Replace the zero `database_id` with the returned D1 ID. Set `MEDKIT_BASE_URL` to the exact `https://medkit.YOUR-SUBDOMAIN.workers.dev` origin. Change the Worker name if needed. Leave `MEDKIT_OAUTH_CLIENTS_JSON` as `[]` until you have a verified client callback. Ensure the two rate-limit namespace IDs do not overlap another application in your account.
+4. Run `npm run verify` and `npm run worker:deploy -- --config wrangler.production.jsonc`. This applies versioned D1 migrations before deploying. It does not change your account plan. The checked-in local configuration cannot be used by this deployment command.
+5. Run `npm run worker:account -- --remote --config wrangler.production.jsonc --output /absolute/private/medkit-owner.json` once. Store that credential file privately. If the command reports an uncertain failure, keep the file and check whether that subject exists before creating another account. D1 receives only the key hash.
+6. Open the public URL and sign in through **Manage connections**. Keep local records separate for testing. Uploading actual records is an independent, explicit action in MedKit.
 
-   ```json
-   [
-     {
-       "client_id": "medkit-chatgpt",
-       "client_name": "ChatGPT",
-       "redirect_uris": ["EXACT_CALLBACK_FROM_CHATGPT"]
-     }
-   ]
-   ```
+No paid plan, custom domain, CI deployment credential, public signup endpoint, or automatic upload is required. Deployment is manual. After later changes, run verification and the same deployment command. Do not delete or recreate the D1 database to fix an application deployment.
 
-3. Save and redeploy. Use `medkit-chatgpt` as the client ID in ChatGPT, with no client secret. The client must use PKCE S256 and the exact `/mcp` resource. If the available ChatGPT surface requires dynamic registration or client-secret authentication, stop: this adapter does not support those modes.
-4. Complete consent in MedKit. Read permissions are listed; enable **Prepare record changes** only if you want write proposals. Enter the owner key only on your MedKit origin.
-5. Use synthetic records to test a medicine addition, an actual dose, owner confirmation through the returned review link, and readback. Revoke access in MedKit and verify the client can no longer read.
+## Optional GitHub sign-in
 
-The app and MCP use the same connected records. A proposal is saved only after owner confirmation in MedKit. Native iOS/Android databases are not synchronized. See [integration boundaries](INTEGRATIONS.md) for scope, expiry, and deletion behavior.
+GitHub identifies MedKit users without entering an access key on each device. This is separate from Cloudflare dashboard login and MCP consent. Configured owners and explicitly invited numeric GitHub user IDs can sign in. Other users cannot create accounts. Usernames are resolved through GitHub when inviting; sign-in uses the immutable numeric ID, not a username or email match.
 
-## Backups and maintenance
+1. [Register a GitHub OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) with your MedKit HTTPS origin as its homepage and `https://YOUR-MEDKIT-ORIGIN/api/login/github/callback` as its callback. Do not enable device flow.
+2. Obtain the intended GitHub account's numeric ID (for example, `gh api user --jq .id`) and the existing MedKit `subject` from the private provisioning file. Do not copy its `key` into configuration or chat.
+3. Set `MEDKIT_GITHUB_CLIENT_ID` and `MEDKIT_GITHUB_ACCOUNTS_JSON` in the private production config's `vars`. The latter is a serialized JSON array such as `[{"githubId":"12345","subject":"EXISTING-MEDKIT-SUBJECT"}]`, with real values substituted. Map each GitHub ID once. Do not provision another MedKit account for another device.
+4. Store the client secret through the local prompt from `npx wrangler secret put MEDKIT_GITHUB_CLIENT_SECRET --config wrangler.production.jsonc`. Never put it in committed files, browser code, `vars`, or chat. Node deployments use the same three environment variables.
+5. Run verification and the normal migration/deployment command. Choose **Sign in with GitHub** in **Settings → Manage connections**. Verify the same account from a second browser session using synthetic records.
 
-Export records through MedKit before an upgrade and store the export privately. An app export contains health records; it is not a full server backup with accounts, sessions, and grants. Protect the owner key separately. Full database backups must preserve SQLite consistency; do not copy only the main file while WAL writes are active. Test restoration before relying on backups.
+The server requests no repository or email scopes. It verifies the current numeric GitHub user ID and discards the provider token. State, PKCE S256, a browser-bound cookie and single-use login requests protect the flow. The resulting MedKit session lasts eight hours. GitHub receives sign-in requests, not health records. Login keeps local records separate. Keep the owner key as a private backup; self-service linking, recovery/key rotation UI and native synchronization are not implemented.
 
-Render provides disk snapshots, but their existence is not evidence that MedKit restoration has been tested. Restoring an old server backup can restore old grants or sessions; stop client access and review authorization state before reopening a restored service. MedKit has no account recovery or key-rotation command.
+All three settings must be configured together; incomplete configuration fails startup. Leave all three absent for key-only access. Removing a mapping prevents future GitHub logins but does not revoke existing MedKit sessions. Do not log callback query strings or provider credentials. Hourly cleanup removes up to 500 expired GitHub login attempts in addition to the existing session/OAuth cleanup budget.
 
-Only the mounted disk persists across restarts and redeploys. Do not switch this template to a free service or an ephemeral filesystem. MedKit does not encrypt records at the application layer. Review the hosting provider's access controls and storage protections before using real health data. Do not enable request-body, cookie, Authorization-header, OAuth-query, or health-record logging.
+### Invite-only accounts
 
-## Configuration
+To enable host invitation management, add `"admin": true` to the intended existing owner's entry in `MEDKIT_GITHUB_ACCOUNTS_JSON`, then redeploy. This grants invitation management to that MedKit subject, including its backup-key sessions. Other configured owners are not administrators by default. Do not assign this role to guests.
 
-| Variable                    | Purpose                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------- |
-| `MEDKIT_DATABASE`           | Absolute path to the database outside the checkout.                                               |
-| `MEDKIT_BASE_URL`           | Explicit public origin. Overrides `RENDER_EXTERNAL_URL`; use when configuring a custom domain.    |
-| `MEDKIT_OAUTH_CLIENTS_JSON` | Client allowlist as JSON. `[]` disables OAuth client registration during bootstrap.               |
-| `MEDKIT_OAUTH_CLIENTS`      | Alternative path to a private JSON allowlist file. Set exactly one client configuration variable. |
-| `MEDKIT_BIND_HOST`          | `127.0.0.1` by default. Use `0.0.0.0` only behind a trusted proxy or firewall.                    |
-| `PORT`                      | Listener port. Defaults to 4174; Render supplies its own port.                                    |
+The host signs in and opens **Settings → Invite people**. Look up a GitHub username, check the returned profile, then confirm the invitation. This enables access without sending a message. Share the hosted MedKit address with the intended person separately. Their first successful GitHub sign-in atomically creates one empty account. Concurrent logins reuse the same account. There is no public signup or guest access-key generation.
 
-The readiness probe uses OAuth resource discovery and does not return records. Changing the public origin requires matching OAuth resource and callback configuration. Do not trust arbitrary forwarded Host or Origin headers.
+Profile lookup uses the OAuth application's credentials server-side for GitHub's public-user API. Credentials stay in the authorization header on the fixed GitHub API origin; redirects are rejected. This adds no repository or email permissions. GitHub rate limits can still temporarily prevent lookup and invitation.
 
-Provider references checked on 2026-11-14: [Blueprint fields](https://render.com/docs/blueprint-spec), [persistent disks](https://render.com/docs/disks), [regions](https://render.com/docs/regions), and [Node version selection](https://render.com/docs/node-version).
+The invitation list contains identities and access status, not health records. The application isolates each person's records, reviews and OAuth grants. Hosting operators still have database access; this is not end-to-end encryption. Invitations are limited to 100 stored entries per deployment, including revoked entries; this is an administrative guard, not a tested user-capacity claim.
+
+Revoking an invited member blocks sign-in, removes their browser sessions, revokes their AI grants and unused authorization codes, and rejects pending changes in one transaction. Their records remain. Previously downloaded/shared copies cannot be recalled. Re-inviting the same numeric GitHub identity restores the same records but does not restore old sessions or grants. Configured owner mappings cannot be changed or revoked through the invitation UI.
+
+A MedKit invitation does not install a ChatGPT plugin or give another ChatGPT account access to the host's private plugin. Arrange client/workspace access separately and register each actual callback. Public directory publication requires its own review and publishing workflow; no public listing or universal installation link is provided by this repository.
+
+## Connect ChatGPT or another MCP client
+
+The endpoint is `https://YOUR-WORKER.workers.dev/mcp`. Follow the [integration guide](INTEGRATIONS.md#authorize-an-ai-client) for permissions and client limitations. The server supports pre-registered public clients with PKCE S256. It does not implement dynamic registration or client-secret authentication.
+
+Obtain the exact callback from the intended client's connection setup. Set `MEDKIT_OAUTH_CLIENTS_JSON` in the private production config to a JSON-encoded array of `{ "client_id", "client_name", "redirect_uris" }`, then redeploy. Do not assume a universal ChatGPT callback. Registering a client alone does not grant access to any account; the owner must approve OAuth consent.
+
+Before real records, verify with synthetic data: authorize read and write scopes, ask for a medicine or dose entry, open the returned review link, confirm the fields in MedKit, read back the saved record, and revoke the connection. Suggestions never count as consumption. An MCP token cannot approve its own change. ChatGPT account eligibility, Android behavior, and live client compatibility require separate testing.
+
+## Cost and operating limits
+
+Official [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) were checked on 2026-11-14. Workers Free allows 100,000 requests per day and 10 ms CPU per request. D1 Free includes 5 million rows read and 100,000 rows written per day, with 5 GB total storage; the [per-database Free limit](https://developers.cloudflare.com/d1/platform/limits/) is 500 MB. Indexes, audit writes, and transaction guards consume database operations too. This adapter runs the Worker for static assets as well, so their requests count toward its request quota.
+
+Free limits are not a promise of capacity for a particular number of users. Exhausted quotas can make requests fail. This repository does not enable paid overages. A later paid upgrade currently starts at US$5/month plus usage above included allowances. Monitor actual requests, CPU, D1 row operations, and storage before deciding. Local workerd tests do not establish production CPU consumption or Free-tier suitability under load.
+
+Connected records currently use one JSON aggregate per account. Writes above 1,000,000 UTF-8 bytes per stored value fail before commit, leaving room under D1's row limit. This is an explicit initial storage limit, not unlimited health-history storage. Export remains available. Larger histories need a tested storage migration. Personal local-mode storage is separate from this server limit.
+
+## Operations and recovery
+
+The Worker disables application observability logs and preview URLs. Do not enable request-body, Authorization, cookie, OAuth-code, or consent-URL logging. Cloudflare still operates the infrastructure; this is not end-to-end encryption. Rate limiting is per Cloudflare location and eventually consistent, not an exact global quota or a substitute for authentication.
+
+D1 batches validate observed row and namespace revisions before committing records, stock changes, authorization state, and audit metadata together. Conflicts retry the transaction using the original expected record version. A stale intention still fails with HTTP 409. Hourly bounded cleanup removes expired OAuth requests, codes, access/refresh tokens, and owner sessions. Used refresh tokens remain until their expiry to detect replay.
+
+D1's [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/) and private exports are recovery options, not proof of a tested backup process. Review the retention available on your plan and test restoration with synthetic data first. Restoring an old database can restore old sessions and grants; isolate access and revoke them before reopening a restored deployment. Application deletion does not erase provider backups or recall external-client responses. Native device synchronization and account recovery remain unimplemented.

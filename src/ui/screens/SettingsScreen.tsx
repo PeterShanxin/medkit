@@ -18,6 +18,7 @@ import {
 import { ProfileForm } from '../forms/ProfileForm';
 import { PageHeading } from '../Shell';
 import { useRecords } from '../store';
+import { InvitationsPanel } from './InvitationsPanel';
 
 export function SettingsScreen() {
   const { state, run, mode, setMode, erase, exportRecords, connected } =
@@ -52,6 +53,7 @@ export function SettingsScreen() {
       <View style={{ gap: 24, maxWidth: 800 }}>
         {error && <Notice danger>{error}</Notice>}
         {message && <Notice>{message}</Notice>}
+        <InvitationsPanel key={connected ? state.profile.id : 'local'} />
         <Panel>
           <SectionTitle title="Safety context">
             <Button
@@ -143,6 +145,9 @@ export function SettingsScreen() {
           </Copy>
           <Link href="/connections" style={{ marginTop: 16 }}>
             <Copy>Manage connections →</Copy>
+          </Link>
+          <Link href="/integrations" style={{ marginTop: 16 }}>
+            <Copy>Use MedKit with ChatGPT →</Copy>
           </Link>
           <Copy muted size={13} style={{ marginTop: 12 }}>
             Sharing an export gives its recipient a copy. Deleting your records

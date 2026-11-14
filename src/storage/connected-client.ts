@@ -19,13 +19,17 @@ export class ConnectionError extends Error {
 export async function connectionRequest(
   path: string,
   body?: unknown,
+  expectedSubject?: string,
 ): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(`/api/${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(expectedSubject ? { 'X-MedKit-Account': expectedSubject } : {}),
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(12_000),
     });
@@ -85,7 +89,9 @@ export class ConnectedService {
   }
   async load(): Promise<State> {
     try {
-      return await this.accept(await connectionRequest('records'));
+      return await this.accept(
+        await connectionRequest('records', undefined, this.subject),
+      );
     } catch (error) {
       this.syncError =
         error instanceof Error ? error.message : 'Refresh failed.';
@@ -143,10 +149,14 @@ export class ConnectedService {
     if (version === undefined)
       throw new Error('Refresh connected records before saving a change.');
     return this.accept(
-      await connectionRequest('records', {
-        ...mutation,
-        version,
-      }),
+      await connectionRequest(
+        'records',
+        {
+          ...mutation,
+          version,
+        },
+        this.subject,
+      ),
     );
   }
   async export(): Promise<string> {
@@ -165,7 +175,11 @@ export class ConnectedService {
     if (!this.current)
       throw new Error('Reconnect before deleting connected records.');
     return this.accept(
-      await connectionRequest('erase', { version: this.current.version }),
+      await connectionRequest(
+        'erase',
+        { version: this.current.version },
+        this.subject,
+      ),
     );
   }
   close() {
