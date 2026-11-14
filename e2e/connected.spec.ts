@@ -16,6 +16,17 @@ test('connected medicine record, human review, reload, offline cache and revocat
   await page.emulateMedia({
     colorScheme: testInfo.project.name === 'mobile' ? 'dark' : 'light',
   });
+  const callbackServer = createServer((_req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'no-store',
+    });
+    res.end('Synthetic OAuth callback');
+  });
+  await new Promise<void>((resolve) =>
+    callbackServer.listen(0, '127.0.0.1', resolve),
+  );
+  const callback = `http://127.0.0.1:${(callbackServer.address() as { port: number }).port}/callback`;
   const db = new Database(':memory:');
   let app: Express;
   const listener = createServer((req, res) => app(req, res));
@@ -31,7 +42,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
       {
         client_id: 'browser-test',
         client_name: 'Synthetic ChatGPT client',
-        redirect_uris: ['http://127.0.0.1/callback'],
+        redirect_uris: [callback],
       },
     ],
   });
@@ -56,23 +67,23 @@ test('connected medicine record, human review, reload, offline cache and revocat
     const query = new URLSearchParams({
       response_type: 'code',
       client_id: 'browser-test',
-      redirect_uri: 'http://127.0.0.1/callback',
+      redirect_uri: callback,
       code_challenge: createHash('sha256').update(verifier).digest('base64url'),
       code_challenge_method: 'S256',
       scope: connectionScopes.join(' '),
       resource: base + '/mcp',
       state: 'browser-state',
     });
-    await page.route('http://127.0.0.1/callback*', (route) =>
-      route.fulfill({ body: 'Synthetic OAuth callback' }),
-    );
     await page.goto(base + '/authorize?' + query);
     await expect(
       page.getByRole('heading', { name: 'Connect Synthetic ChatGPT client' }),
     ).toBeVisible();
     await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
-    await page.waitForURL('http://127.0.0.1/callback*');
+    await page.waitForURL(
+      (url) =>
+        url.origin === new URL(callback).origin && url.pathname === '/callback',
+    );
     const code = new URL(page.url()).searchParams.get('code')!;
     const exchange = await fetch(base + '/token', {
       method: 'POST',
@@ -82,7 +93,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
         client_id: 'browser-test',
         code,
         code_verifier: verifier,
-        redirect_uri: 'http://127.0.0.1/callback',
+        redirect_uri: callback,
         resource: base + '/mcp',
       }),
     });
@@ -173,6 +184,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
     await context.setOffline(false);
     await client.close();
     await new Promise<void>((resolve) => listener.close(() => resolve()));
+    await new Promise<void>((resolve) => callbackServer.close(() => resolve()));
     db.close();
   }
 });
