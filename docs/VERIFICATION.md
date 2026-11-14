@@ -57,3 +57,20 @@ Executed on 2026-11-14 with synthetic data:
 The local D1 migration and private-file account provisioning commands completed successfully. iOS and Android JavaScript/Hermes exports passed; no native device test was performed.
 
 No Cloudflare account was authenticated during these checks. No production D1 database, public Worker deployment, live ChatGPT session, or real health-data upload was tested. The restricted Linux environment cannot run `wrangler dev` because network-interface enumeration is blocked; the programmatic Miniflare tests explicitly bind loopback and ran successfully. Normal local setup remains documented for environments that permit interface enumeration.
+
+## Public Cloudflare and ChatGPT acceptance
+
+Executed on 2026-11-14 from Windows with Node 24.22.0 and Microsoft Edge, using synthetic records only. Source commit `2c4b4101c7a8ae4599327726f15296c01d9a19be` was deployed to a Workers Free account with D1. This was a separately provisioned personal deployment, not an automatically provisioned service for repository users.
+
+- `npm ci`, `npm run verify` (71 unit/integration tests and nine Worker tests), `npm run build:native`, and 12 browser journeys passed locally. `npm audit --omit=dev` reported no vulnerabilities.
+- Public pages and OAuth discovery returned 200. Unauthenticated record access and MCP initialization returned 401; an incorrect API origin returned 403.
+- Owner login with separate local records, synthetic medicine creation, refresh persistence, and JSON export passed. The downloaded synthetic export was checked and removed.
+- Real ChatGPT connected with a pre-registered public client, its exact callback, token authentication `none`, and PKCE. Read-only consent allowed `list_medicines`. A write proposal under that grant failed without creating a review; its generic error did not distinguish permissions from invalid record details.
+- After separate write consent, ChatGPT prepared a synthetic medicine and first batch. It remained absent from the cabinet until confirmation through the owner Web session. Both Web and ChatGPT then read back eight tablets and the correct expiry; the request status was `applied`.
+- ChatGPT prepared a synthetic taken-dose event. Inventory remained eight before owner confirmation. Confirmation created one dose and reduced the batch to seven; Web history and ChatGPT readback agreed. The operator performed confirmation through the owner UI with the user's explicit authorization for disposable synthetic testing.
+- Retrying that dose proposal from ChatGPT with the same request ID and identical input returned the original applied review. A fresh read still showed one dose and seven tablets.
+- Insufficient-stock and mismatched-unit proposals failed without changing inventory. Their errors were generic; the client did not receive distinct validation codes.
+- Revoking the connection rejected its pending stock adjustment. Submitting the previously opened owner confirmation form then failed with “This request has already been reviewed.” Both subsequent ChatGPT reads failed with a generic client error rather than returning records; the UI did not expose an HTTP status.
+- Cleanup deleted all synthetic connected records and reviews and revoked both test grants. The connected cabinet showed zero medicines and batches, history was empty, and no clients or pending requests remained. Owner sign-out returned to an empty local home screen. The ChatGPT account connection and synthetic test chat were removed; the reusable app registration and private owner credential were retained.
+
+Native devices, ChatGPT Android, OpenClaw, production CPU/capacity, and backup restoration remain unverified. This acceptance does not establish clinical safety, end-to-end encryption, or native synchronization.
