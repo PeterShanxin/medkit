@@ -146,7 +146,7 @@ export function PlansScreen() {
           title="Update plan status"
           onClose={() => setChange(null)}
           submitLabel="Confirm status"
-          onSubmit={(operationId) =>
+          onSubmit={(edit) =>
             run(
               [
                 {
@@ -155,7 +155,7 @@ export function PlansScreen() {
                   status: change.status,
                 },
               ],
-              operationId,
+              edit,
             )
           }
         >

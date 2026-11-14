@@ -47,7 +47,7 @@ export function DoseForm({
         outcome === 'taken' ? 'Confirm dose taken' : `Record ${outcome} dose`
       }
       onClose={onClose}
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         if (!medicine) throw new Error('Choose a medicine.');
         await run(
           [
@@ -68,7 +68,7 @@ export function DoseForm({
               },
             },
           ],
-          operationId,
+          edit,
         );
       }}
     >
@@ -193,11 +193,8 @@ export function CorrectDoseForm({
       onClose={onClose}
       submitLabel="Void this record"
       destructive
-      onSubmit={(operationId) =>
-        run(
-          [{ type: 'dose.void', id: dose.id, reason, returnStock }],
-          operationId,
-        )
+      onSubmit={(edit) =>
+        run([{ type: 'dose.void', id: dose.id, reason, returnStock }], edit)
       }
     >
       <Copy>

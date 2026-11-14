@@ -292,10 +292,10 @@ export function MedicineScreen({ id }: { id: string }) {
           title={medicine.archived ? 'Restore medicine' : 'Archive medicine'}
           onClose={() => setDialog(null)}
           submitLabel={medicine.archived ? 'Restore' : 'Archive'}
-          onSubmit={(operationId) =>
+          onSubmit={(edit) =>
             run(
               [{ type: 'medicine.archive', id, archived: !medicine.archived }],
-              operationId,
+              edit,
             )
           }
         >
@@ -326,8 +326,8 @@ export function MedicineScreen({ id }: { id: string }) {
           submitLabel="Mark discarded"
           destructive
           onClose={() => setDiscard(null)}
-          onSubmit={(operationId) =>
-            run([{ type: 'batch.discard', id: discard.id }], operationId)
+          onSubmit={(edit) =>
+            run([{ type: 'batch.discard', id: discard.id }], edit)
           }
         >
           <Copy>
@@ -363,7 +363,7 @@ function AdjustStockForm({
       title="Adjust stock"
       onClose={onClose}
       submitLabel="Update stock"
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         if (!quantity.trim()) throw new Error('Enter a quantity.');
         await run(
           [
@@ -374,7 +374,7 @@ function AdjustStockForm({
               reason,
             },
           ],
-          operationId,
+          edit,
         );
       }}
     >

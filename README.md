@@ -17,6 +17,7 @@ MedKit is a local-first Expo application for responsive Web, iOS, and Android. T
 - Use light, dark, and system themes. Explore synthetic examples in a separate database.
 - Review local checks for expiry, duplicate recorded ingredients, incomplete context, and changed formulations.
 - Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
+- Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. See [server setup](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
 
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 
@@ -65,11 +66,11 @@ See [verification evidence](docs/VERIFICATION.md) and [integration instructions]
 
 ## Your records
 
-Web records remain in this browser's IndexedDB. Native records use a local SQLite database. MedKit does not provide application-level encryption, cloud backup, synchronization, or a record-import interface. Browser cleanup or uninstalling the application can remove records. Keep sensitive exports outside this repository.
+By default, Web records remain in this browser's IndexedDB and native records use local SQLite. The optional connected Web mode stores records on your configured server and downloads a separate offline copy. Uploading local records requires explicit selection and an empty connected account. Connected writes require a network connection; native databases and separate local Web records are not synchronized. MedKit does not provide application-level database encryption or managed backups. Browser cleanup or uninstalling the application can remove records. Keep sensitive exports outside this repository.
 
-Deletion removes records from the active local database. It does not securely erase physical storage or recall exports and external-client responses. Demo records are synthetic and use a separate database.
+Local deletion removes records from the active local database. It does not securely erase physical storage or recall exports and external-client responses. Demo records are synthetic and use a separate database.
 
-The application sends no health records to a model or remote service. If you configure an external MCP client, that client controls whether it sends returned records to its own provider. Read [security and privacy boundaries](SECURITY.md) first.
+Local mode sends no health records to a model or remote service. Connected mode sends records to the server you sign in to. If you configure an external MCP client, that client controls whether it sends returned records to its own provider. Read [security and privacy boundaries](SECURITY.md) first.
 
 ## Project information
 
@@ -78,4 +79,4 @@ The application sends no health records to a model or remote service. If you con
 - [Agent guide](docs/AGENT_GUIDE.md)
 - [AGPL-3.0 license](LICENSE)
 
-Still outside this milestone: remote HTTPS/OAuth MCP, ChatGPT authorization, live AI adapters, multi-device sync, reminders, packaging photos/OCR, multilingual UI, and native device verification.
+Not yet verified or provided: production hosting, a live ChatGPT/OpenClaw connection, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.

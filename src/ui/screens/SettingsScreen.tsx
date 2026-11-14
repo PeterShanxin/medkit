@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'expo-router';
 import { View } from 'react-native';
 import { Download, Plus } from 'lucide-react-native';
 import { consultationSummary } from '../../application/queries';
@@ -19,7 +20,8 @@ import { PageHeading } from '../Shell';
 import { useRecords } from '../store';
 
 export function SettingsScreen() {
-  const { state, run, mode, setMode, erase, exportRecords } = useRecords();
+  const { state, run, mode, setMode, erase, exportRecords, connected } =
+    useRecords();
   const [profile, setProfile] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirm, setConfirm] = useState('');
@@ -100,9 +102,11 @@ export function SettingsScreen() {
         <Panel>
           <SectionTitle title="Your records" />
           <Copy muted size={14}>
-            Saved on this device. No account or cloud sync is required. MedKit
-            does not encrypt the local database. Use a device lock and a private
-            browser profile.
+            {connected
+              ? 'Saved in your connected space, with a downloaded copy on this device. Changes require a connection. Your separate local records are unchanged.'
+              : 'Saved on this device. No account or cloud sync is required.'}{' '}
+            MedKit does not encrypt its databases. Use a device lock and a
+            private browser profile.
           </Copy>
           <Copy muted size={13} style={{ marginTop: 12 }}>
             Browser data can be removed by storage cleanup. Exports contain
@@ -133,9 +137,13 @@ export function SettingsScreen() {
         <Panel>
           <SectionTitle title="AI & external access" />
           <Copy muted size={14}>
-            No AI provider or remote service is connected. Local record checks
-            work offline.
+            {connected
+              ? 'Manage authorized clients and review their proposed changes in Connections.'
+              : 'Connect a hosted MedKit space to share records with authorized AI clients. Local record checks work offline.'}
           </Copy>
+          <Link href="/connections" style={{ marginTop: 16 }}>
+            <Copy>Manage connections →</Copy>
+          </Link>
           <Copy muted size={13} style={{ marginTop: 12 }}>
             Sharing an export gives its recipient a copy. Deleting your records
             here does not delete copies you previously shared.
@@ -160,12 +168,13 @@ export function SettingsScreen() {
         {mode === 'personal' && (
           <View style={{ gap: 12, paddingVertical: 16 }}>
             <Copy size={18} weight="medium">
-              Delete local records
+              {connected ? 'Delete connected records' : 'Delete local records'}
             </Copy>
             <Copy muted size={13}>
-              Remove all medicines, plans, dose history, episodes, safety
-              context, and audit records from this device. Export anything you
-              want to keep first.
+              {connected
+                ? 'Remove all records and pending changes from this connected space, and revoke every AI client. Other downloaded or exported copies remain. Your separate local records are unchanged.'
+                : 'Remove all medicines, plans, dose history, episodes, safety context, and audit records from this device.'}{' '}
+              Export anything you want to keep first.
             </Copy>
             <Button
               label="Delete all my records"
@@ -181,7 +190,11 @@ export function SettingsScreen() {
       {profile && <ProfileForm onClose={() => setProfile(false)} />}
       {deleting && (
         <FormDialog
-          title="Delete all local records?"
+          title={
+            connected
+              ? 'Delete connected records?'
+              : 'Delete all local records?'
+          }
           destructive
           submitLabel="Permanently delete"
           onClose={() => setDeleting(false)}
@@ -189,7 +202,11 @@ export function SettingsScreen() {
             if (confirm !== 'DELETE')
               throw new Error('Type DELETE to confirm.');
             await erase();
-            setMessage('Your local records have been deleted.');
+            setMessage(
+              connected
+                ? 'Connected records deleted. AI access revoked.'
+                : 'Your local records have been deleted.',
+            );
           }}
         >
           <Notice danger>

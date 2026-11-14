@@ -16,7 +16,7 @@ export function EpisodeForm({ onClose }: { onClose(): void }) {
       title="Start a health episode"
       submitLabel="Start episode"
       onClose={onClose}
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         const id = uuid();
         const at = parseDateTimeInput(onset);
         await run(
@@ -34,7 +34,7 @@ export function EpisodeForm({ onClose }: { onClose(): void }) {
               },
             },
           ],
-          operationId,
+          edit,
         );
       }}
     >
@@ -107,7 +107,7 @@ export function ObservationForm({
       title="Update symptoms"
       submitLabel="Record observation"
       onClose={onClose}
-      onSubmit={(operationId) =>
+      onSubmit={(edit) =>
         run(
           [
             {
@@ -122,7 +122,7 @@ export function ObservationForm({
               },
             },
           ],
-          operationId,
+          edit,
         )
       }
     >
@@ -156,7 +156,7 @@ export function ConsultationForm({
     <FormDialog
       title="Record a consultation"
       onClose={onClose}
-      onSubmit={(operationId) =>
+      onSubmit={(edit) =>
         run(
           [
             {
@@ -172,7 +172,7 @@ export function ConsultationForm({
               },
             },
           ],
-          operationId,
+          edit,
         )
       }
     >
@@ -218,7 +218,7 @@ export function ResolveForm({
       title="Mark recovered"
       onClose={onClose}
       submitLabel="Mark recovered"
-      onSubmit={(operationId) =>
+      onSubmit={(edit) =>
         run(
           [
             {
@@ -227,7 +227,7 @@ export function ResolveForm({
               at: parseDateTimeInput(at),
             },
           ],
-          operationId,
+          edit,
         )
       }
     >
