@@ -95,6 +95,20 @@ test('host invites isolated users from the app and revokes access without sharin
     await expect(
       page.getByRole('link', { name: 'Open ChatGPT plugins ↗' }),
     ).toHaveAttribute('href', 'https://chatgpt.com/plugins');
+    await expect(
+      page.getByRole('link', {
+        name: 'Manage connections & pending changes →',
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('textbox', { name: 'GitHub username', exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('link', { name: 'Back to settings', exact: true })
+      .click();
+    await expect(
+      page.getByText('Invite people', { exact: true }),
+    ).toBeVisible();
     for (const login of ['synthetic-alice', 'synthetic-bob']) {
       await page
         .getByRole('textbox', { name: 'GitHub username', exact: true })
@@ -145,7 +159,7 @@ test('host invites isolated users from the app and revokes access without sharin
     await expect(
       bob.getByText('0 medicines · 0 batches', { exact: true }),
     ).toBeVisible();
-    await bob.goto(base + '/integrations');
+    await bob.goto(base + '/settings');
     await expect(
       bob.getByRole('textbox', { name: 'GitHub username', exact: true }),
     ).toHaveCount(0);

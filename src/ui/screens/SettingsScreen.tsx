@@ -18,6 +18,7 @@ import {
 import { ProfileForm } from '../forms/ProfileForm';
 import { PageHeading } from '../Shell';
 import { useRecords } from '../store';
+import { InvitationsPanel } from './InvitationsPanel';
 
 export function SettingsScreen() {
   const { state, run, mode, setMode, erase, exportRecords, connected } =
@@ -52,6 +53,7 @@ export function SettingsScreen() {
       <View style={{ gap: 24, maxWidth: 800 }}>
         {error && <Notice danger>{error}</Notice>}
         {message && <Notice>{message}</Notice>}
+        <InvitationsPanel key={connected ? state.profile.id : 'local'} />
         <Panel>
           <SectionTitle title="Safety context">
             <Button

@@ -47,7 +47,7 @@ All three settings must be configured together; incomplete configuration fails s
 
 To enable host invitation management, add `"admin": true` to the intended existing owner's entry in `MEDKIT_GITHUB_ACCOUNTS_JSON`, then redeploy. This grants invitation management to that MedKit subject, including its backup-key sessions. Other configured owners are not administrators by default. Do not assign this role to guests.
 
-The host signs in and opens **Settings → Use MedKit with ChatGPT → Invite people**. Look up a GitHub username, check the returned profile, then confirm the invitation. This enables access without sending a message. Share the hosted MedKit address with the intended person separately. Their first successful GitHub sign-in atomically creates one empty account. Concurrent logins reuse the same account. There is no public signup or guest access-key generation.
+The host signs in and opens **Settings → Invite people**. Look up a GitHub username, check the returned profile, then confirm the invitation. This enables access without sending a message. Share the hosted MedKit address with the intended person separately. Their first successful GitHub sign-in atomically creates one empty account. Concurrent logins reuse the same account. There is no public signup or guest access-key generation.
 
 Profile lookup uses the OAuth application's credentials server-side for GitHub's public-user API. Credentials stay in the authorization header on the fixed GitHub API origin; redirects are rejected. This adds no repository or email permissions. GitHub rate limits can still temporarily prevent lookup and invitation.
 
