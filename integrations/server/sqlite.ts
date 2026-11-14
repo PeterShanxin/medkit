@@ -12,7 +12,7 @@ export function openDatabase(file: string) {
   const version = (
     sql.prepare('PRAGMA user_version').get() as { user_version: number }
   ).user_version;
-  if (![0, 1, 2].includes(version)) {
+  if (![0, 1, 2, 3].includes(version)) {
     sql.close();
     throw new Error('Unsupported server database version.');
   }
@@ -32,6 +32,22 @@ export function openDatabase(file: string) {
           'INSERT INTO entries SELECT namespace,key,value,lower(hex(randomblob(16))) FROM legacy_entries; DROP TABLE legacy_entries;',
         );
       sql.exec('PRAGMA user_version=2; COMMIT');
+    } catch (error) {
+      sql.exec('ROLLBACK');
+      sql.close();
+      throw error;
+    }
+  }
+  if (version < 3) {
+    sql.exec('BEGIN IMMEDIATE');
+    try {
+      sql.exec(
+        readFileSync(
+          'integrations/cloudflare/migrations/0002_github_login.sql',
+          'utf8',
+        ),
+      );
+      sql.exec('PRAGMA user_version=3; COMMIT');
     } catch (error) {
       sql.exec('ROLLBACK');
       sql.close();

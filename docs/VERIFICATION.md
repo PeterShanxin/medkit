@@ -74,3 +74,14 @@ Executed on 2026-11-14 from Windows with Node 24.22.0 and Microsoft Edge, using 
 - Cleanup deleted all synthetic connected records and reviews and revoked both test grants. The connected cabinet showed zero medicines and batches, history was empty, and no clients or pending requests remained. Owner sign-out returned to an empty local home screen. The ChatGPT account connection and synthetic test chat were removed; the reusable app registration and private owner credential were retained.
 
 Native devices, ChatGPT Android, OpenClaw, production CPU/capacity, and backup restoration remain unverified. This acceptance does not establish clinical safety, end-to-end encryption, or native synchronization.
+
+## GitHub sign-in verification
+
+Executed locally on Windows on 2026-11-15 with synthetic data:
+
+- `npm run verify` passed: strict TypeScript, formatting, 80 unit/integration tests, the production Web build, Wrangler dry run, and ten compiled Worker/D1 tests.
+- New checks cover two independent sessions for one existing account, PKCE, browser-bound state, expiry, denial, replay/concurrent callbacks, unmapped identities, provider failures and redirects, safe local return URLs, and the Node schema 2-to-3 migration without replacing records. The Worker check exercises the compiled login flow and callback replay with a controlled outbound GitHub service.
+- All 14 desktop/mobile browser journeys passed, including GitHub login, same-account record readback in two isolated browser contexts, refresh, logout, and return to separate local records.
+- iOS and Android JavaScript/Hermes exports passed. This does not add native account synchronization or establish native device behavior.
+
+GitHub responses in these automated checks are synthetic. Live OAuth App registration, production configuration and actual GitHub sign-in have not yet been verified. Earlier public ChatGPT acceptance above used owner-key login and does not prove the GitHub flow.

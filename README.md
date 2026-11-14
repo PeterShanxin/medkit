@@ -19,6 +19,8 @@ MedKit is a local-first Expo application for responsive Web, iOS, and Android. T
 - Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
 - Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. Deploy on [Cloudflare Workers + D1](docs/DEPLOYMENT.md), or use the [local Node server](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
 
+Optional [GitHub sign-in](docs/DEPLOYMENT.md#optional-github-sign-in) opens the same existing connected account on another device. Local mode and backup access keys remain available. Public signup is not enabled.
+
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 
 ## Run locally
@@ -79,4 +81,4 @@ Local mode sends no health records to a model or remote service. Connected mode 
 - [Agent guide](docs/AGENT_GUIDE.md)
 - [AGPL-3.0 license](LICENSE)
 
-Not yet verified or provided: production hosting, a live ChatGPT/OpenClaw connection, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.
+Public Cloudflare hosting and live ChatGPT have been checked with synthetic data in one personal deployment; see the [verification record](docs/VERIFICATION.md). Not yet verified or provided: live GitHub account acceptance, OpenClaw, native account synchronization, offline write merging, account recovery UI, live AI providers, reminders, packaging photos/OCR, multilingual UI, and native device testing.

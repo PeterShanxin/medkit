@@ -17,6 +17,7 @@ import { Identity } from './identity';
 import { OAuth, configuredClientSchema, type RemoteGrant } from './oauth';
 import { Records } from './records';
 import { consentPage } from './consent';
+import { GitHubLogin, githubReturnTo, type GitHubConfig } from './github-login';
 
 export interface ServerOptions {
   db: Database;
@@ -25,17 +26,20 @@ export interface ServerOptions {
   webRoot?: string;
   externalRateLimit?: boolean;
   originValidated?: boolean;
+  github?: GitHubConfig;
+  githubFetch?: typeof fetch;
 }
 const cookieName = 'medkit_session';
-function sessionToken(req: Request) {
+function readCookie(req: Request, name: string) {
   return (
     req.headers.cookie
       ?.split(';')
       .map((s) => s.trim())
-      .find((s) => s.startsWith(`${cookieName}=`))
-      ?.slice(cookieName.length + 1) ?? ''
+      .find((s) => s.startsWith(`${name}=`))
+      ?.slice(name.length + 1) ?? ''
   );
 }
+const sessionToken = (req: Request) => readCookie(req, cookieName);
 function rateLimit(limit: number): RequestHandler {
   const entries = new Map<string, { count: number; until: number }>();
   return (req, res, next) => {
@@ -76,6 +80,18 @@ export function createServerApp(options: ServerOptions) {
     oauth = new OAuth(db, base, options.clients),
     records = new Records(db);
   const app = express();
+  const github = options.github
+    ? new GitHubLogin(db, identity, base, options.github, options.githubFetch)
+    : undefined;
+  const sessionCookie = {
+    httpOnly: true,
+    secure: base.protocol === 'https:',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 8 * 60 * 60_000,
+  };
+  const githubCookie = 'medkit_github_login';
+  const githubCookiePath = '/api/login/github';
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({
@@ -109,7 +125,71 @@ export function createServerApp(options: ServerOptions) {
   };
   const owner = async (req: Request) =>
     await identity.session(sessionToken(req));
-  app.get('/api/capabilities', (_req, res) => res.json({ connected: true }));
+  app.get('/api/capabilities', (_req, res) =>
+    res.json({ connected: true, githubLogin: !!github }),
+  );
+  app.post(
+    '/api/login/github',
+    sameOrigin,
+    options.externalRateLimit ? (_req, _res, next) => next() : rateLimit(10),
+    async (req, res) => {
+      if (!github)
+        throw new RequestError(404, 'GitHub sign-in is not configured.');
+      const input = z
+        .object({
+          returnTo: githubReturnTo.default('/connections'),
+          redirect: z.literal('yes').optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const start = await github.start(input.returnTo);
+      res.cookie(githubCookie, start.browser, {
+        ...sessionCookie,
+        path: githubCookiePath,
+        maxAge: 10 * 60_000,
+      });
+      if (input.redirect) {
+        res.set(
+          'Content-Security-Policy',
+          String(res.getHeader('Content-Security-Policy')).replace(
+            "form-action 'self'",
+            "form-action 'self' https://github.com",
+          ),
+        );
+        res.redirect(303, start.authorizationUrl);
+      } else res.json({ authorizationUrl: start.authorizationUrl });
+    },
+  );
+  app.get(
+    '/api/login/github/callback',
+    options.externalRateLimit ? (_req, _res, next) => next() : rateLimit(20),
+    async (req, res) => {
+      res.clearCookie(githubCookie, { path: githubCookiePath });
+      try {
+        if (!github) throw new Error('Not configured');
+        const input = z
+          .object({
+            state: z.string().min(30).max(100),
+            code: z.string().min(1).max(500).optional(),
+            error: z.string().max(200).optional(),
+          })
+          .parse(req.query);
+        const result = await github.finish(
+          input.state,
+          readCookie(req, githubCookie),
+          input.error ? undefined : input.code,
+        );
+        res.cookie(cookieName, result.session.token, sessionCookie);
+        const target = new URL(result.returnTo, base);
+        if (target.pathname === '/connections')
+          target.searchParams.set('signin', 'github');
+        res.redirect(303, target.href);
+      } catch {
+        // Strip provider codes and errors from the browser URL; never echo credentials.
+        res.redirect(303, new URL('/connections?signin=failed', base).href);
+      }
+    },
+  );
   app.post(
     '/api/login',
     sameOrigin,
@@ -120,13 +200,7 @@ export function createServerApp(options: ServerOptions) {
         .strict()
         .parse(req.body);
       const session = await identity.login(key);
-      res.cookie(cookieName, session.token, {
-        httpOnly: true,
-        secure: base.protocol === 'https:',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 8 * 60 * 60_000,
-      });
+      res.cookie(cookieName, session.token, sessionCookie);
       res.json({ subject: session.subject });
     },
   );
@@ -239,7 +313,7 @@ export function createServerApp(options: ServerOptions) {
       'Content-Security-Policy',
       String(res.getHeader('Content-Security-Policy')).replace(
         "form-action 'self'",
-        `form-action 'self' ${callbackOrigin}`,
+        `form-action 'self' ${callbackOrigin}${github ? ' https://github.com' : ''}`,
       ),
     );
     res
@@ -249,6 +323,7 @@ export function createServerApp(options: ServerOptions) {
           oauth,
           z.string().max(100).parse(req.query.request),
           signedIn,
+          !!github,
         ),
       );
   });

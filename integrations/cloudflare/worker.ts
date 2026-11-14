@@ -5,6 +5,7 @@ import { createServerApp } from '../server/app';
 import { configuredClientSchema } from '../server/oauth';
 import { hash } from '../server/database';
 import { openD1 } from './d1';
+import { githubConfig } from '../server/github-login';
 
 interface Bindings {
   DB: D1Database;
@@ -13,12 +14,20 @@ interface Bindings {
   LOGIN_LIMIT: RateLimit;
   MEDKIT_BASE_URL: string;
   MEDKIT_OAUTH_CLIENTS_JSON: string;
+  MEDKIT_GITHUB_CLIENT_ID?: string;
+  MEDKIT_GITHUB_CLIENT_SECRET?: string;
+  MEDKIT_GITHUB_ACCOUNTS_JSON?: string;
 }
 const bindings = env as unknown as Bindings;
 const base = new URL(bindings.MEDKIT_BASE_URL);
 const { app } = createServerApp({
   db: openD1(bindings.DB),
   baseUrl: base.href,
+  github: githubConfig({
+    MEDKIT_GITHUB_CLIENT_ID: bindings.MEDKIT_GITHUB_CLIENT_ID,
+    MEDKIT_GITHUB_CLIENT_SECRET: bindings.MEDKIT_GITHUB_CLIENT_SECRET,
+    MEDKIT_GITHUB_ACCOUNTS_JSON: bindings.MEDKIT_GITHUB_ACCOUNTS_JSON,
+  }),
   clients: z
     .array(configuredClientSchema)
     .parse(JSON.parse(bindings.MEDKIT_OAUTH_CLIENTS_JSON)),
@@ -69,7 +78,12 @@ export default {
     // Cloudflare supplies this header. Do not trust X-Forwarded-For from callers.
     const key = hash(request.headers.get('CF-Connecting-IP') ?? 'local');
     const allowed = await env.REQUEST_LIMIT.limit({ key });
-    const login = ['/api/login', '/connect/approve'].includes(route);
+    const login = [
+      '/api/login',
+      '/api/login/github',
+      '/api/login/github/callback',
+      '/connect/approve',
+    ].includes(route);
     if (
       !allowed.success ||
       (login && !(await env.LOGIN_LIMIT.limit({ key })).success)
@@ -88,6 +102,14 @@ export default {
     await env.DB.prepare(
       `DELETE FROM entries WHERE rowid IN (
       SELECT rowid FROM entries WHERE namespace IN ('sessions','oauth-pending','oauth-codes','oauth-access','oauth-refresh')
+      AND json_extract(value,'$.expiresAt') <= ? ORDER BY json_extract(value,'$.expiresAt') LIMIT 500
+    )`,
+    )
+      .bind(Date.now())
+      .run();
+    await env.DB.prepare(
+      `DELETE FROM entries WHERE rowid IN (
+      SELECT rowid FROM entries WHERE namespace='github-login'
       AND json_extract(value,'$.expiresAt') <= ? ORDER BY json_extract(value,'$.expiresAt') LIMIT 500
     )`,
     )

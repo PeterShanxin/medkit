@@ -23,11 +23,12 @@ async function main() {
     );
     db.close();
   } else {
-    const { baseUrl, clients, host, port } = serverConfig(process.env);
+    const { baseUrl, clients, host, port, github } = serverConfig(process.env);
     const { app } = createServerApp({
       db,
       baseUrl,
       clients,
+      github,
       webRoot: path.resolve('dist'),
     });
     const server = app.listen(port, host, () =>

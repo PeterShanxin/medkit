@@ -20,14 +20,21 @@ export class Identity {
     return { subject, key };
   }
   async login(key: string) {
-    const owner = await this.db.get('owners', hash(key), ownerSchema);
-    if (!owner) throw new RequestError(401, 'The access key is invalid.');
-    const token = secret();
-    await this.db.put('sessions', hash(token), {
-      subject: owner.subject,
-      expiresAt: this.now() + 8 * 60 * 60_000,
+    return this.db.atomic(async () => {
+      const subject = await this.owner(key);
+      return this.loginSubject(subject);
     });
-    return { subject: owner.subject, token };
+  }
+  async loginSubject(subject: string) {
+    return this.db.atomic(async () => {
+      await this.db.records(subject);
+      const token = secret();
+      await this.db.put('sessions', hash(token), {
+        subject,
+        expiresAt: this.now() + 8 * 60 * 60_000,
+      });
+      return { subject, token };
+    });
   }
   async owner(key: string) {
     const owner = await this.db.get('owners', hash(key), ownerSchema);

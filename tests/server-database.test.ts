@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -45,5 +45,45 @@ it('rejects an oversized record without partially changing another entry', async
     expect(await db.list('synthetic', z.unknown())).toEqual([]);
   } finally {
     db.close();
+  }
+});
+it('adds GitHub login expiry cleanup to a version 2 database without replacing records', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'medkit-migration-'));
+  const file = path.join(dir, 'test.sqlite');
+  try {
+    const old = new DatabaseSync(file);
+    old.exec(
+      await readFile(
+        'integrations/cloudflare/migrations/0001_entries.sql',
+        'utf8',
+      ),
+    );
+    old.exec('PRAGMA user_version=2');
+    old
+      .prepare('INSERT INTO entries VALUES(?,?,?,?)')
+      .run('synthetic', 'record', '{"value":42}', 'unchanged-revision');
+    old.close();
+    const current = openDatabase(file);
+    expect(
+      await current.get('synthetic', 'record', z.object({ value: z.number() })),
+    ).toEqual({ value: 42 });
+    current.close();
+    const migrated = new DatabaseSync(file);
+    expect(migrated.prepare('PRAGMA user_version').get()?.user_version).toBe(3);
+    expect(
+      migrated
+        .prepare("SELECT revision FROM entries WHERE namespace='synthetic'")
+        .get()?.revision,
+    ).toBe('unchanged-revision');
+    expect(
+      migrated
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE name='github_login_expiry'",
+        )
+        .get()?.name,
+    ).toBe('github_login_expiry');
+    migrated.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

@@ -95,6 +95,10 @@ For local synthetic testing only, `MEDKIT_BASE_URL=http://127.0.0.1:4174` permit
 
 The server has no account recovery UI or key-rotation command. Protect the owner key and database together. Stop the server and back up the private database directory, including any SQLite WAL files, before upgrades. Test restoration privately. Unknown database schema versions fail closed. Do not store this database on a shared network filesystem.
 
+### GitHub owner sign-in
+
+An administrator can enable [GitHub sign-in for existing accounts](DEPLOYMENT.md#optional-github-sign-in). GitHub identifies the owner; it does not grant AI access. A signed-out MCP consent page offers GitHub sign-in and returns to the same consent request. Read/write consent and independent owner confirmation still apply. Login requests expire after ten minutes; restart an expired connection from the AI client. Owner keys remain a backup. Public signup and native synchronization are not added.
+
 ### Authorize an AI client
 
 Use the server's HTTPS `/mcp` URL, OAuth, and the configured client ID. This server supports **pre-registered public OAuth clients with PKCE S256**. It does not offer dynamic registration, CIMD, or client-secret authentication. A client that requires those methods needs a separate tested adapter.

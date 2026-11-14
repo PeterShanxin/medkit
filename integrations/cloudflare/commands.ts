@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { configuredClientSchema } from '../server/oauth';
+import { githubConfig } from '../server/github-login';
 
 export function wrangler(args: string[]) {
   execFileSync(
@@ -17,6 +18,21 @@ export function wrangler(args: string[]) {
 export function productionConfig(file: string) {
   if (path.resolve(file) === path.resolve('wrangler.jsonc'))
     throw new Error('Use a separate production configuration file.');
+  const raw = JSON.parse(readFileSync(file, 'utf8'));
+  if (raw.vars && 'MEDKIT_GITHUB_CLIENT_SECRET' in raw.vars)
+    throw new Error(
+      'Store the GitHub client secret with Wrangler secrets, not vars.',
+    );
+  githubConfig({
+    MEDKIT_GITHUB_CLIENT_ID: raw.vars?.MEDKIT_GITHUB_CLIENT_ID,
+    MEDKIT_GITHUB_ACCOUNTS_JSON: raw.vars?.MEDKIT_GITHUB_ACCOUNTS_JSON,
+    // The real secret is supplied by the deployed Worker binding.
+    MEDKIT_GITHUB_CLIENT_SECRET:
+      raw.vars?.MEDKIT_GITHUB_CLIENT_ID !== undefined ||
+      raw.vars?.MEDKIT_GITHUB_ACCOUNTS_JSON !== undefined
+        ? 'validated-at-runtime'
+        : undefined,
+  });
   const config = z
     .object({
       name: z.string().min(1),
@@ -33,7 +49,7 @@ export function productionConfig(file: string) {
         )
         .length(1),
     })
-    .parse(JSON.parse(readFileSync(file, 'utf8')));
+    .parse(raw);
   const url = new URL(config.vars.MEDKIT_BASE_URL);
   if (
     url.protocol !== 'https:' ||

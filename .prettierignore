@@ -10,3 +10,4 @@ LICENSE
 .wrangler
 dist-native
 wrangler.production.jsonc
+.remember

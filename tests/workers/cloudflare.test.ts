@@ -15,6 +15,8 @@ import { fixture, now } from '../fixtures';
 import { z } from 'zod';
 
 const base = 'http://127.0.0.1:8787';
+const githubSubject = randomUUID();
+const githubRequests: string[] = [];
 let mf: Miniflare;
 let runtimeOptions: ConstructorParameters<typeof Miniflare>[0];
 let directory: string;
@@ -104,6 +106,11 @@ beforeAll(async () => {
     compatibilityFlags: ['nodejs_compat'],
     bindings: {
       MEDKIT_BASE_URL: base,
+      MEDKIT_GITHUB_CLIENT_ID: 'synthetic-worker-github',
+      MEDKIT_GITHUB_CLIENT_SECRET: 'synthetic-worker-secret',
+      MEDKIT_GITHUB_ACCOUNTS_JSON: JSON.stringify([
+        { githubId: '12345', subject: githubSubject },
+      ]),
       MEDKIT_OAUTH_CLIENTS_JSON: JSON.stringify([
         {
           client_id: 'test-client',
@@ -111,6 +118,23 @@ beforeAll(async () => {
           redirect_uris: ['http://127.0.0.1/callback'],
         },
       ]),
+    },
+    outboundService: async (request) => {
+      githubRequests.push(request.url);
+      if (request.url === 'https://github.com/login/oauth/access_token') {
+        const body = new URLSearchParams(await request.text());
+        expect(body.get('client_secret')).toBe('synthetic-worker-secret');
+        expect(body.get('code_verifier')).toBeTruthy();
+        return new Response(
+          JSON.stringify({
+            access_token: 'synthetic-provider-token',
+            token_type: 'bearer',
+          }),
+        );
+      }
+      if (request.url === 'https://api.github.com/user')
+        return new Response(JSON.stringify({ id: 12345 }));
+      return new Response('Unexpected outbound request', { status: 502 });
     },
     d1Databases: ['DB'],
     ratelimits: {
@@ -139,7 +163,16 @@ beforeAll(async () => {
     'utf8',
   );
   await sql.exec(schema.replaceAll('\n', ' '));
+  await sql.exec(
+    (
+      await readFile(
+        'integrations/cloudflare/migrations/0002_github_login.sql',
+        'utf8',
+      )
+    ).replaceAll('\n', ' '),
+  );
   db = openD1(sql);
+  await db.initialize(githubSubject);
   account = await new Identity(db).provision();
   second = await new Identity(db).provision();
   await new Records(db).import(account.subject, {
@@ -169,6 +202,49 @@ it('serves the built app and keeps private routes out of static fallback', async
   expect(
     (await request('/api/records', undefined, { Cookie: cookie })).status,
   ).toBe(200);
+});
+it('completes GitHub browser sign-in through the compiled Worker and rejects callback replay', async () => {
+  const headers = { 'CF-Connecting-IP': '192.0.2.44' };
+  const start = await request('/api/login/github', {}, headers);
+  expect(start.status).toBe(200);
+  const browserCookie = start.headers.get('set-cookie')!.split(';')[0]!;
+  const auth = new URL(
+    ((await start.json()) as { authorizationUrl: string }).authorizationUrl,
+  );
+  const callback =
+    '/api/login/github/callback?' +
+    new URLSearchParams({
+      state: auth.searchParams.get('state')!,
+      code: 'synthetic-code',
+    });
+  const result = await request(callback, undefined, {
+    ...headers,
+    Cookie: browserCookie,
+  });
+  expect(result.status).toBe(303);
+  expect(await db.list('github-login', z.unknown())).toEqual([]);
+  expect(githubRequests).toEqual([
+    'https://github.com/login/oauth/access_token',
+    'https://api.github.com/user',
+  ]);
+  expect(result.headers.get('location')).toBe(
+    base + '/connections?signin=github',
+  );
+  const cookieMatch = result.headers
+    .get('set-cookie')!
+    .match(/medkit_session=([^; ,]+)/)!;
+  expect(cookieMatch).toBeTruthy();
+  const session = await request('/api/session', undefined, {
+    Cookie: cookieMatch[0],
+  });
+  expect(await session.json()).toEqual({ subject: githubSubject });
+  const replay = await request(callback, undefined, {
+    ...headers,
+    Cookie: browserCookie,
+  });
+  expect(replay.headers.get('location')).toBe(
+    base + '/connections?signin=failed',
+  );
 });
 it('runs OAuth and real SDK MCP prepare, concurrent owner confirmation, readback and revocation on D1', async () => {
   const tokenResponse = await exchange(await authorize());
@@ -398,6 +474,12 @@ it('shares login throttling across trailing-slash and case variants', async () =
     statuses.push((await request(routes[i % routes.length]!, {})).status);
   expect(statuses[0]).toBe(400);
   expect(statuses[10]).toBe(429);
-  for (const route of [...routes, '/API/LOGIN', '/CONNECT/APPROVE/'])
+  for (const route of [
+    ...routes,
+    '/API/LOGIN',
+    '/CONNECT/APPROVE/',
+    '/API/LOGIN/GITHUB/',
+    '/api/login/github/callback/',
+  ])
     expect((await request(route, {})).status).toBe(429);
 });

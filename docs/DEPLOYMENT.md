@@ -29,6 +29,20 @@ Local D1 lives in the ignored `.wrangler/` directory. Use synthetic records ther
 
 No paid plan, custom domain, CI deployment credential, public signup endpoint, or automatic upload is required. Deployment is manual. After later changes, run verification and the same deployment command. Do not delete or recreate the D1 database to fix an application deployment.
 
+## Optional GitHub sign-in
+
+GitHub can identify an existing MedKit owner without entering an access key on each device. This is separate from Cloudflare dashboard login and MCP consent. Only explicitly mapped numeric GitHub user IDs can sign in. Unmapped users cannot create accounts. No username or email matching is used.
+
+1. [Register a GitHub OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) with your MedKit HTTPS origin as its homepage and `https://YOUR-MEDKIT-ORIGIN/api/login/github/callback` as its callback. Do not enable device flow.
+2. Obtain the intended GitHub account's numeric ID (for example, `gh api user --jq .id`) and the existing MedKit `subject` from the private provisioning file. Do not copy its `key` into configuration or chat.
+3. Set `MEDKIT_GITHUB_CLIENT_ID` and `MEDKIT_GITHUB_ACCOUNTS_JSON` in the private production config's `vars`. The latter is a serialized JSON array such as `[{"githubId":"12345","subject":"EXISTING-MEDKIT-SUBJECT"}]`, with real values substituted. Map each GitHub ID once. Do not provision another MedKit account for another device.
+4. Store the client secret through the local prompt from `npx wrangler secret put MEDKIT_GITHUB_CLIENT_SECRET --config wrangler.production.jsonc`. Never put it in committed files, browser code, `vars`, or chat. Node deployments use the same three environment variables.
+5. Run verification and the normal migration/deployment command. Choose **Sign in with GitHub** in **Settings → Manage connections**. Verify the same account from a second browser session using synthetic records.
+
+The server requests no repository or email scopes. It verifies the current numeric GitHub user ID and discards the provider token. State, PKCE S256, a browser-bound cookie and single-use login requests protect the flow. The resulting MedKit session lasts eight hours. GitHub receives sign-in requests, not health records. Login keeps local records separate. Keep the owner key as a private backup; self-service linking, recovery/key rotation UI and native synchronization are not implemented.
+
+All three settings must be configured together; incomplete configuration fails startup. Leave all three absent for key-only access. Removing a mapping prevents future GitHub logins but does not revoke existing MedKit sessions. Do not log callback query strings or provider credentials. Hourly cleanup removes up to 500 expired GitHub login attempts in addition to the existing session/OAuth cleanup budget.
+
 ## Connect ChatGPT or another MCP client
 
 The endpoint is `https://YOUR-WORKER.workers.dev/mcp`. Follow the [integration guide](INTEGRATIONS.md#authorize-an-ai-client) for permissions and client limitations. The server supports pre-registered public clients with PKCE S256. It does not implement dynamic registration or client-secret authentication.

@@ -8,6 +8,7 @@ import {
   type Review,
 } from '../../application/connected/contracts';
 import { connectionRequest } from '../../storage/connected-client';
+import { startGitHubSignIn } from '../../storage/connection';
 import {
   Button,
   Choice,
@@ -23,8 +24,12 @@ import { useRecords } from '../store';
 
 export function ConnectionsScreen() {
   const { connected, connect, disconnect, refresh, mode } = useRecords();
-  const { review: requestedId } = useLocalSearchParams<{ review?: string }>();
+  const { review: requestedId, signin } = useLocalSearchParams<{
+    review?: string;
+    signin?: string;
+  }>();
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [githubAvailable, setGithubAvailable] = useState(false);
   const [key, setKey] = useState('');
   const [upload, setUpload] = useState('no');
   const [error, setError] = useState('');
@@ -42,11 +47,16 @@ export function ConnectionsScreen() {
       return;
     }
     void connectionRequest('capabilities')
-      .then((value) =>
-        setAvailable(
-          z.object({ connected: z.literal(true) }).safeParse(value).success,
-        ),
-      )
+      .then((value) => {
+        const parsed = z
+          .object({
+            connected: z.literal(true),
+            githubLogin: z.boolean().optional(),
+          })
+          .safeParse(value);
+        setAvailable(parsed.success);
+        setGithubAvailable(parsed.success && parsed.data.githubLogin === true);
+      })
       .catch(() => setAvailable(false));
   }, []);
   const load = useCallback(async () => {
@@ -98,6 +108,12 @@ export function ConnectionsScreen() {
       <PageHeading title="Connections" />
       <View style={{ maxWidth: 800, gap: 24 }}>
         {error && <Notice danger>{error}</Notice>}
+        {signin === 'failed' && (
+          <Notice danger>
+            GitHub sign-in was not completed. Try again with the GitHub account
+            linked to this space, or use your backup access key.
+          </Notice>
+        )}
         {message && <Notice>{message}</Notice>}
         {!connected ? (
           <Panel>
@@ -120,6 +136,30 @@ export function ConnectionsScreen() {
                   clients. Connected records are stored on this server. Changes
                   require an internet connection.
                 </Copy>
+                {githubAvailable && (
+                  <>
+                    <Button
+                      label="Sign in with GitHub"
+                      disabled={working}
+                      onPress={() =>
+                        void action(() =>
+                          startGitHubSignIn(
+                            requestedId
+                              ? `/connections?review=${requestedId}`
+                              : '/connections',
+                          ),
+                        )
+                      }
+                    />
+                    <Copy muted size={13}>
+                      Open the same connected space on another device. GitHub
+                      sign-in keeps this device’s local records separate.
+                    </Copy>
+                    <Copy muted size={13}>
+                      Or use your backup access key below.
+                    </Copy>
+                  </>
+                )}
                 <Field
                   label="Access key"
                   value={key}
@@ -297,6 +337,20 @@ export function ConnectionsScreen() {
             setKey('');
           }}
         >
+          {githubAvailable && (
+            <Button
+              label="Sign in with GitHub"
+              onPress={() =>
+                void action(() =>
+                  startGitHubSignIn(
+                    requestedId
+                      ? `/connections?review=${requestedId}`
+                      : '/connections',
+                  ),
+                )
+              }
+            />
+          )}
           <Field label="Access key" secure value={key} onChange={setKey} />
         </FormDialog>
       )}
