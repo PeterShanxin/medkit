@@ -1,10 +1,9 @@
-import { readFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { z } from 'zod';
 import { Database } from './database';
 import { Identity } from './identity';
-import { configuredClientSchema } from './oauth';
 import { createServerApp } from './app';
+import { serverConfig } from './config';
 
 const file = process.env.MEDKIT_DATABASE;
 if (!file || !path.isAbsolute(file))
@@ -23,23 +22,16 @@ if (process.argv.includes('--create-account')) {
   );
   db.close();
 } else {
-  const baseUrl = process.env.MEDKIT_BASE_URL;
-  const clientsFile = process.env.MEDKIT_OAUTH_CLIENTS;
-  if (!baseUrl || !clientsFile)
-    throw new Error('Set MEDKIT_BASE_URL and MEDKIT_OAUTH_CLIENTS.');
-  const clients = z
-    .array(configuredClientSchema)
-    .min(1)
-    .parse(JSON.parse(readFileSync(clientsFile, 'utf8')));
+  const { baseUrl, clients, host, port } = serverConfig(process.env);
   const { app } = createServerApp({
     db,
     baseUrl,
     clients,
     webRoot: path.resolve('dist'),
   });
-  const server = app.listen(Number(process.env.PORT ?? 4174), '127.0.0.1', () =>
+  const server = app.listen(port, host, () =>
     console.log(
-      'MedKit connected server is listening on loopback. Use a trusted HTTPS reverse proxy for remote access.',
+      `MedKit connected server is listening on ${host}:${port}. Remote access requires a trusted HTTPS reverse proxy.`,
     ),
   );
   const stop = () =>

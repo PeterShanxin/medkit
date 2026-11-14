@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# This provisions a paid service only when the owner applies the Blueprint.
+previews:
+  generation: off
+services:
+  - type: web
+    name: medkit
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build:web
+    startCommand: npm run server
+    healthCheckPath: /.well-known/oauth-protected-resource/mcp
+    disk:
+      name: medkit-records
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: NODE_ENV
+        value: production
+      - key: MEDKIT_BIND_HOST
+        value: 0.0.0.0
+      - key: MEDKIT_DATABASE
+        value: /var/data/medkit/records.sqlite
+      - key: MEDKIT_OAUTH_CLIENTS_JSON
+        sync: false

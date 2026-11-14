@@ -70,7 +70,7 @@ Supported changes: add medicine with its first batch, add another batch, record 
 
 ### Run a private connected server
 
-Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and one server process. Ephemeral/serverless filesystems are not supported. No hosting service, public endpoint, backups, or live ChatGPT connection is provisioned by this repository.
+Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and one server process. Ephemeral/serverless filesystems are not supported. A [Render deployment template](DEPLOYMENT.md) is available. No hosting service, public endpoint, backups, or live ChatGPT connection is provisioned by this repository.
 
 1. Build with `npm ci` and `npm run build:web`.
 2. Set `MEDKIT_DATABASE` to an absolute file path **outside the checkout**, in an owner-only directory. On Windows, protect the directory with account ACLs; Unix mode bits do not configure Windows ACLs.
@@ -87,7 +87,7 @@ Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and o
 ]
 ```
 
-5. Set `MEDKIT_OAUTH_CLIENTS` to that file. Set `MEDKIT_BASE_URL` to the public HTTPS origin with no path, query, or fragment. Set `PORT` to the internal port (default `4174`). Run `npm run server`.
+5. Set `MEDKIT_OAUTH_CLIENTS` to that file, or set `MEDKIT_OAUTH_CLIENTS_JSON` to its JSON content. Set exactly one. An empty array permits initial Web setup without authorizing any OAuth client. Set `MEDKIT_BASE_URL` to the public HTTPS origin with no path, query, or fragment. Set `PORT` to the internal port (default `4174`). Run `npm run server`.
 6. Terminate HTTPS at a trusted reverse proxy and forward to `127.0.0.1:4174`. Preserve the public `Host` header. Do not expose the backend port directly. Do not log cookies, Authorization headers, request bodies, OAuth codes, or consent URLs. The app deliberately does not trust forwarded IP headers; its rate limits apply to the proxy address as an aggregate.
 7. Open the hosted Web app, go to **Settings → Manage connections**, and enter the owner access key. Choose **Keep separate** unless you intend to upload this browser's local records. Upload is explicit, limited to an empty connected account, and cannot overwrite existing server records. The native app is not synchronized.
 
