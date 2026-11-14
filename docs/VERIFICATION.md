@@ -30,3 +30,15 @@ These are captured application screens with synthetic demo data. Desktop light a
 Native persistence, keyboard behavior, file sharing, and accessibility still need iOS and Android device testing. Safari, Firefox, assistive-technology behavior, production hosting, live OpenClaw, and ChatGPT connections were not tested. A passing browser run is not evidence of those capabilities.
 
 The local execution environment could not launch Chromium because it denied browser sockets. Browser tests therefore ran in an isolated temporary checkout on Windows, using an existing Chrome executable. No existing browser profile or personal MedKit records were used. The temporary checkout and browser processes were removed after evidence was collected.
+
+## Connected records milestone
+
+Executed on 2026-11-14 with synthetic records only:
+
+- Strict TypeScript, formatting checks, and the production Web build passed.
+- 61 unit/integration tests passed. New coverage includes real Streamable HTTP MCP, OAuth discovery, PKCE and audience checks, code replay, refresh rotation/replay, separate write consent, cross-account isolation, owner-only confirmation, stale/expired proposals, idempotent stock deductions, audit-failure rollback, database restart, deletion/revocation, and offline cache behavior.
+- Both iOS and Android JavaScript/Hermes exports passed. Connected accounts remain Web-only; this is not native device evidence.
+- `npm audit --omit=dev` reported no vulnerabilities at the time of the check.
+- 10 browser journeys passed at desktop and mobile sizes, including the connected flow in light and dark themes. Browser checks ran in an isolated Windows checkout with Chrome because this container blocks Chromium's singleton sockets. No personal browser profile or health data was used.
+
+A synthetic SDK client completes authorization, prepares a dose, waits for browser confirmation, reads the saved dose, and receives a denial after revocation. It is not a live ChatGPT or OpenClaw session. Public HTTPS hosting, real-client OAuth compatibility, and ChatGPT Android behavior remain unverified.

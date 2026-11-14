@@ -82,9 +82,9 @@ export function describeChange(change: Change, state: State) {
   };
   const batchDetails = (id: string) => {
     const b = batch(id);
-    add('Batch', id);
     add('Storage location', b?.location || 'Not recorded');
     add('Expiry', b?.expiresOn);
+    if (b?.acquiredOn) add('Acquired on', b.acquiredOn);
   };
   const symptom = (s: {
     symptom: string;
@@ -140,7 +140,7 @@ export function describeChange(change: Change, state: State) {
       const d = change.dose;
       medicineDetails(d.medicineId);
       add('Amount', `${d.amount} ${d.unit}`);
-      add('Taken at', d.at);
+      add('Event time', d.at);
       add('Outcome', d.outcome);
       if (d.batchId) batchDetails(d.batchId);
       add(
@@ -159,7 +159,15 @@ export function describeChange(change: Change, state: State) {
           'None',
       );
       add('Notes', d.notes || 'None');
-      return { title: 'Record actual dose', details };
+      return {
+        title:
+          d.outcome === 'taken'
+            ? 'Record actual dose'
+            : d.outcome === 'skipped'
+              ? 'Record skipped dose'
+              : 'Record missed dose',
+        details,
+      };
     }
     case 'start_episode':
       add('Episode', change.episode.title);

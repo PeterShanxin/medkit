@@ -13,6 +13,9 @@ test('connected medicine record, human review, reload, offline cache and revocat
   page,
   context,
 }, testInfo) => {
+  await page.emulateMedia({
+    colorScheme: testInfo.project.name === 'mobile' ? 'dark' : 'light',
+  });
   const db = new Database(':memory:');
   let app: Express;
   const listener = createServer((req, res) => app(req, res));
@@ -112,6 +115,7 @@ test('connected medicine record, human review, reload, offline cache and revocat
     await page.screenshot({
       path: testInfo.outputPath('connected-review.png'),
       fullPage: true,
+      animations: 'disabled',
     });
     await page
       .getByRole('button', { name: 'Confirm and save', exact: true })

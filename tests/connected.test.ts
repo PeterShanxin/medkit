@@ -619,3 +619,31 @@ it('rejects pending requests when their external grant is revoked', async () => 
     ).status,
   ).toBe(409);
 });
+
+it('does not expose proposal details through a refresh token with reduced read permissions', async () => {
+  const s = await setup();
+  const full = await s.tokens();
+  const grant = s.oauth.access(full.access_token);
+  const proposal = s.records.propose(
+    s.a.subject,
+    grant.id,
+    grant.clientName,
+    s.input(),
+  );
+  const response = await s.exchange({
+    grant_type: 'refresh_token',
+    refresh_token: full.refresh_token,
+    scope: 'records:write',
+  });
+  expect(response.status).toBe(200);
+  const token = await response.json();
+  const client = await s.client(token.access_token);
+  expect(
+    (
+      await client.callTool({
+        name: 'get_record_change_status',
+        arguments: { id: proposal.id },
+      })
+    ).isError,
+  ).toBe(true);
+});

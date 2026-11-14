@@ -200,6 +200,18 @@ export function createServerApp(options: ServerOptions) {
     } catch {
       /* The consent form requests an owner key. */
     }
+    // Keep same-origin form POSTs identifiable; suppress referrers on the external OAuth redirect.
+    res.set('Referrer-Policy', 'same-origin');
+    const callbackOrigin = new URL(
+      oauth.pending(z.string().max(100).parse(req.query.request)).redirectUri,
+    ).origin;
+    res.set(
+      'Content-Security-Policy',
+      String(res.getHeader('Content-Security-Policy')).replace(
+        "form-action 'self'",
+        `form-action 'self' ${callbackOrigin}`,
+      ),
+    );
     res
       .type('html')
       .send(
@@ -285,7 +297,7 @@ export function createServerApp(options: ServerOptions) {
           );
         },
         status: async (id: string) => {
-          const grant = authorize(['records:write'], 'change.status');
+          const grant = authorize([...connectionScopes], 'change.status');
           return records.get(grant.subject, grant.id, id);
         },
       };

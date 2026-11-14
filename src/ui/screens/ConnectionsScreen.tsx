@@ -190,7 +190,16 @@ export function ConnectionsScreen() {
                 .slice(0, 5)
                 .map((r) => (
                   <Copy key={r.id} muted size={13} style={{ marginTop: 14 }}>
-                    {r.title} · {r.status}
+                    {r.title} ·{' '}
+                    {
+                      {
+                        pending: 'Pending',
+                        applied: 'Saved',
+                        rejected: 'Rejected',
+                        expired: 'Expired',
+                        stale: 'Needs a new review',
+                      }[r.status]
+                    }
                   </Copy>
                 ))}
             </Panel>
@@ -306,8 +315,8 @@ export function ConnectionsScreen() {
           }}
         >
           <Notice>
-            Confirm what actually happened. This request is not medical advice.
-            Check medicine labels and amounts against your own records.
+            Confirm only what actually happened. Check the medicine, amount, and
+            time.
           </Notice>
           <Copy muted size={13}>
             Request from {selected.clientName}
@@ -318,7 +327,19 @@ export function ConnectionsScreen() {
               <Copy muted size={12}>
                 {detail.label}
               </Copy>
-              <Copy>{detail.value}</Copy>
+              <Copy>
+                {/^\d{4}-\d{2}-\d{2}T/.test(detail.value) &&
+                !Number.isNaN(Date.parse(detail.value))
+                  ? new Date(detail.value).toLocaleString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZoneName: 'short',
+                    })
+                  : detail.value}
+              </Copy>
             </View>
           ))}
           <Button
