@@ -7,7 +7,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Database } from '../integrations/server/database';
 import { createServerApp } from '../integrations/server/app';
 import { connectionScopes } from '../src/application/connected/contracts';
-import { fixture, now } from '../tests/fixtures';
+import { fixture, now, medicineInput } from '../tests/fixtures';
 
 test('connected medicine record, human review, reload, offline cache and revocation', async ({
   page,
@@ -266,7 +266,7 @@ test('connected forms recover a lost response and reject edits from an older ver
           type: 'medicine.save',
           id: data.medicineId,
           data: {
-            ...current.state.medicines[0]!,
+            ...medicineInput,
             genericName: 'Corrected on another device',
           },
         },
