@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { configuredClientSchema } from './oauth';
 
 export function serverConfig(env: Record<string, string | undefined>) {
-  const baseUrl = env.MEDKIT_BASE_URL ?? env.RENDER_EXTERNAL_URL;
+  const baseUrl = env.MEDKIT_BASE_URL;
   if (!baseUrl)
     throw new Error('Set MEDKIT_BASE_URL to the public HTTPS origin.');
   const file = env.MEDKIT_OAUTH_CLIENTS;

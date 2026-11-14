@@ -42,8 +42,8 @@ export class Records {
     private db: Database,
     private clock = () => new Date().toISOString(),
   ) {}
-  private assertVersion(subject: string, version: number) {
-    const current = this.db.records(subject);
+  private async assertVersion(subject: string, version: number) {
+    const current = await this.db.records(subject);
     if (current.version !== version)
       throw new RequestError(
         409,
@@ -51,11 +51,11 @@ export class Records {
       );
     return current;
   }
-  execute(subject: string, raw: unknown) {
+  async execute(subject: string, raw: unknown) {
     const input = mutationSchema.parse(raw);
-    return this.db.atomic(() => {
+    return await this.db.atomic(async () => {
       const payloadHash = hash(JSON.stringify(input.commands));
-      const prior = this.db.get(
+      const prior = await this.db.get(
         `operations:${subject}`,
         input.operationId,
         operationSchema,
@@ -66,27 +66,27 @@ export class Records {
             409,
             'This request ID was already used for a different change.',
           );
-        return this.db.records(subject);
+        return await this.db.records(subject);
       }
-      const current = this.assertVersion(subject, input.version);
+      const current = await this.assertVersion(subject, input.version);
       const state = applyRecordMutation(current.state, input, this.clock());
-      this.db.save(subject, state, current.version + 1);
-      this.db.put(`operations:${subject}`, input.operationId, {
+      await this.db.save(subject, state, current.version + 1);
+      await this.db.put(`operations:${subject}`, input.operationId, {
         hash: payloadHash,
       });
-      this.db.audit(subject, 'records.change', 'owner', 'applied');
-      return this.db.records(subject);
+      await this.db.audit(subject, 'records.change', 'owner', 'applied');
+      return await this.db.records(subject);
     });
   }
-  import(subject: string, snapshot: unknown) {
+  async import(subject: string, snapshot: unknown) {
     const incoming = validateState(exportSchema.parse(snapshot).state);
     if (incoming.dataset !== 'personal')
       throw new RequestError(
         400,
         'Sample data cannot be uploaded to personal records.',
       );
-    return this.db.atomic(() => {
-      const current = this.db.records(subject);
+    return await this.db.atomic(async () => {
+      const current = await this.db.records(subject);
       if (current.version !== 0)
         throw new RequestError(
           409,
@@ -97,49 +97,52 @@ export class Records {
         ...incoming,
         profile: { ...incoming.profile, id: subject },
       };
-      this.db.save(subject, state, 1);
-      this.db.audit(subject, 'records.import', 'owner', 'applied');
-      return this.db.records(subject);
+      await this.db.save(subject, state, 1);
+      await this.db.audit(subject, 'records.import', 'owner', 'applied');
+      return await this.db.records(subject);
     });
   }
-  erase(subject: string, version: number) {
-    return this.db.atomic(() => {
-      const current = this.assertVersion(subject, version);
-      this.db.save(subject, emptyState(subject), current.version + 1);
+  async erase(subject: string, version: number) {
+    return await this.db.atomic(async () => {
+      const current = await this.assertVersion(subject, version);
+      await this.db.save(subject, emptyState(subject), current.version + 1);
       for (const namespace of ['proposals', 'operations', 'audit'])
-        this.db.delete(`${namespace}:${subject}`);
+        await this.db.delete(`${namespace}:${subject}`);
       // The caller revokes all external grants in this same transaction.
-      return this.db.records(subject);
+      return await this.db.records(subject);
     });
   }
-  propose(
+  async propose(
     subject: string,
     grantId: string,
     clientName: string,
     raw: ProposalInput,
-  ): Review {
+  ): Promise<Review> {
     const input = proposalInputSchema.parse(raw);
-    return this.db.atomic(() => {
+    return await this.db.atomic(async () => {
       const namespace = `proposals:${subject}`;
       const requestKey = `${grantId}:${input.requestId}`;
       const requestHash = hash(JSON.stringify(input));
-      const previous = this.db
-        .list(namespace, savedProposal)
-        .find((p) => p.requestKey === requestKey);
+      const previous = (await this.db.list(namespace, savedProposal)).find(
+        (p) => p.requestKey === requestKey,
+      );
       if (previous) {
         if (previous.requestHash !== requestHash)
           throw new RequestError(
             409,
             'Use a new request ID for a different change.',
           );
-        return this.visible(subject, previous);
+        return await this.visible(subject, previous);
       }
-      if (this.list(subject).filter((p) => p.status === 'pending').length >= 20)
+      if (
+        (await this.list(subject)).filter((p) => p.status === 'pending')
+          .length >= 20
+      )
         throw new RequestError(
           429,
           'Review existing requests before adding more.',
         );
-      const current = this.db.records(subject);
+      const current = await this.db.records(subject);
       const commands = changeCommands(input.change, randomUUID);
       const mutation: Mutation = { operationId: randomUUID(), commands };
       // Preview uses exactly the same validated application transition as owner writes.
@@ -160,56 +163,60 @@ export class Records {
         requestHash,
         requestKey,
       });
-      this.db.put(namespace, proposal.id, proposal);
-      this.db.audit(subject, 'change.prepare', grantId, 'pending');
+      await this.db.put(namespace, proposal.id, proposal);
+      await this.db.audit(subject, 'change.prepare', grantId, 'pending');
       return reviewSchema.parse(proposal);
     });
   }
-  private visible(subject: string, p: z.infer<typeof savedProposal>): Review {
+  private async visible(
+    subject: string,
+    p: z.infer<typeof savedProposal>,
+  ): Promise<Review> {
     const status =
       p.status !== 'pending'
         ? p.status
         : Date.parse(p.expiresAt) <= Date.parse(this.clock())
           ? 'expired'
-          : this.db.records(subject).version !== p.version
+          : (await this.db.records(subject)).version !== p.version
             ? 'stale'
             : 'pending';
     return reviewSchema.parse({ ...p, status });
   }
-  list(subject: string): Review[] {
-    return this.db
-      .list(`proposals:${subject}`, savedProposal)
-      .map((p) => this.visible(subject, p))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  async list(subject: string): Promise<Review[]> {
+    const reviews: Review[] = [];
+    for (const p of await this.db.list(`proposals:${subject}`, savedProposal))
+      reviews.push(await this.visible(subject, p));
+    return reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-  cancelGrant(subject: string, grantId: string) {
-    for (const proposal of this.db.list(
+
+  async cancelGrant(subject: string, grantId: string) {
+    for (const proposal of await this.db.list(
       `proposals:${subject}`,
       savedProposal,
     )) {
       if (proposal.grantId === grantId && proposal.status === 'pending') {
-        this.db.put(`proposals:${subject}`, proposal.id, {
+        await this.db.put(`proposals:${subject}`, proposal.id, {
           ...proposal,
           status: 'rejected',
         });
       }
     }
   }
-  get(subject: string, grantId: string, id: string): Review {
-    const p = this.db.get(`proposals:${subject}`, id, savedProposal);
+  async get(subject: string, grantId: string, id: string): Promise<Review> {
+    const p = await this.db.get(`proposals:${subject}`, id, savedProposal);
     if (!p || p.grantId !== grantId)
       throw new RequestError(404, 'This request is unavailable.');
-    return this.visible(subject, p);
+    return await this.visible(subject, p);
   }
-  decide(
+  async decide(
     subject: string,
     id: string,
     approve: boolean,
-    authorizeGrant: (grantId: string) => void,
-  ): Review {
-    return this.db.atomic(() => {
+    authorizeGrant: (grantId: string) => void | Promise<void>,
+  ): Promise<Review> {
+    return await this.db.atomic(async () => {
       const namespace = `proposals:${subject}`;
-      const p = this.db.get(namespace, id, savedProposal);
+      const p = await this.db.get(namespace, id, savedProposal);
       if (!p) throw new RequestError(404, 'This request is unavailable.');
       if (
         (p.status === 'applied' && approve) ||
@@ -219,19 +226,19 @@ export class Records {
       if (p.status !== 'pending')
         throw new RequestError(409, 'This request has already been reviewed.');
       if (approve) {
-        authorizeGrant(p.grantId);
-        if (this.visible(subject, p).status !== 'pending')
+        await authorizeGrant(p.grantId);
+        if ((await this.visible(subject, p)).status !== 'pending')
           throw new RequestError(
             409,
             'This request expired or records changed. Ask for a new request.',
           );
-        const current = this.assertVersion(subject, p.version);
+        const current = await this.assertVersion(subject, p.version);
         const state = applyRecordMutation(current.state, p, this.clock());
-        this.db.save(subject, state, current.version + 1);
+        await this.db.save(subject, state, current.version + 1);
       }
       p.status = approve ? 'applied' : 'rejected';
-      this.db.put(namespace, id, p);
-      this.db.audit(subject, 'change.review', p.grantId, p.status);
+      await this.db.put(namespace, id, p);
+      await this.db.audit(subject, 'change.review', p.grantId, p.status);
       return reviewSchema.parse(p);
     });
   }

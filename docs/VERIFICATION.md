@@ -45,4 +45,15 @@ Visual evidence: [desktop confirmation](screenshots/connected-review-desktop.png
 
 A synthetic SDK client completes authorization, prepares a dose, waits for browser confirmation, reads the saved dose, and receives a denial after revocation. It is not a live ChatGPT or OpenClaw session. Public HTTPS hosting, real-client OAuth compatibility, and ChatGPT Android behavior remain unverified.
 
-The optional Render template passed the official Blueprint JSON Schema. It specifies manual service deployment, one instance, and a persistent disk. Local process tests verify startup with a managed HTTPS origin, owner authentication, Secure cookies, and records/session persistence after restart. This is not evidence of a live Render deployment.
+## Cloudflare adapter milestone
+
+Executed on 2026-11-14 with synthetic data:
+
+- TypeScript checks passed for the app/Node code and the separate Worker runtime types.
+- 71 unit/integration tests passed, including migration of existing Node databases and rollback of oversized writes.
+- Nine compiled Worker/D1 tests passed in workerd through Miniflare. They exercise static/API routing, OAuth consent and PKCE, the actual MCP SDK client, concurrent dose confirmation, cross-account isolation, grant revocation, authorization-code and refresh-token races, transaction rollback, authorization changes during commit, deletion of a long history, and account/session/dose persistence across a Worker restart, query-bounded revocation of 60 historical grants, and shared login throttling for path variants.
+- Wrangler's deployment dry run passed. The Worker bundle was approximately 613 KiB gzip, below the published Free bundle-size limit. This does not establish production CPU usage.
+
+The local D1 migration and private-file account provisioning commands completed successfully. iOS and Android JavaScript/Hermes exports passed; no native device test was performed.
+
+No Cloudflare account was authenticated during these checks. No production D1 database, public Worker deployment, live ChatGPT session, or real health-data upload was tested. The restricted Linux environment cannot run `wrangler dev` because network-interface enumeration is blocked; the programmatic Miniflare tests explicitly bind loopback and ran successfully. Normal local setup remains documented for environments that permit interface enumeration.

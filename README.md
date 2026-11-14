@@ -17,7 +17,7 @@ MedKit is a local-first Expo application for responsive Web, iOS, and Android. T
 - Use light, dark, and system themes. Explore synthetic examples in a separate database.
 - Review local checks for expiry, duplicate recorded ingredients, incomplete context, and changed formulations.
 - Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
-- Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. See [server setup](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
+- Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. Deploy on [Cloudflare Workers + D1](docs/DEPLOYMENT.md), or use the [local Node server](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
 
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 
@@ -60,7 +60,7 @@ npm run build:native
 npm audit --omit=dev
 ```
 
-`verify` runs strict type checking, formatting checks, unit/integration tests, and the Web build. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
+`verify` runs strict type checking, formatting checks, unit/integration tests, the Web build, and compiled Worker/D1 integration tests. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
 
 See [verification evidence](docs/VERIFICATION.md), [integration instructions](docs/INTEGRATIONS.md), and the [cloud deployment guide](docs/DEPLOYMENT.md).
 

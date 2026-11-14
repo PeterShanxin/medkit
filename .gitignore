@@ -49,3 +49,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Private Cloudflare configuration and local D1 data
+.wrangler/
+.dev.vars*
+wrangler.production.jsonc

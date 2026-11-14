@@ -12,20 +12,26 @@
     "web": "expo start --web",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p integrations/cloudflare/tsconfig.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "build:web": "expo export --platform web && node scripts/offline.mjs",
     "preview": "node scripts/serve.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run format:check && npm test && npm run build:web",
+    "verify": "npm run typecheck && npm run format:check && npm test && npm run build:web && npm run test:workers",
     "mcp": "node --import tsx integrations/mcp/stdio.ts",
     "mcp:grant": "node --import tsx integrations/mcp/grant-cli.ts",
     "mcp:revoke": "node --import tsx integrations/mcp/revoke-cli.ts",
     "build:native": "expo export --platform ios --platform android --output-dir dist-native",
     "server": "node --import tsx integrations/server/cli.ts",
-    "server:account": "npm run server -- --create-account"
+    "server:account": "npm run server -- --create-account",
+    "worker:dev": "wrangler dev",
+    "worker:build": "wrangler deploy --dry-run --outdir .wrangler/build",
+    "worker:migrate": "wrangler d1 migrations apply DB --local",
+    "worker:deploy": "node --import tsx integrations/cloudflare/deploy.ts",
+    "worker:account": "node --import tsx integrations/cloudflare/account.ts",
+    "test:workers": "npm run worker:build && vitest run --config vitest.workers.config.mts"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -53,15 +59,18 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261114.1",
     "@playwright/test": "^1.65.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/react": "~19.3.0",
     "fake-indexeddb": "^6.2.8",
+    "miniflare": "^5.20261113.0-beta",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.162.0"
   },
   "overrides": {
     "@expo/cli": {
