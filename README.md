@@ -23,6 +23,8 @@ Optional [GitHub sign-in](docs/DEPLOYMENT.md#optional-github-sign-in) opens the 
 
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 
+Simpler ChatGPT plugin installation for invited users on independent personal accounts is deferred in [issue #5](https://github.com/PeterShanxin/medkit/issues/5).
+
 ## Run locally
 
 Use Node.js 24 and npm. The lockfile is committed.
