@@ -72,7 +72,7 @@ function Brand() {
 
 export function Shell({ children }: React.PropsWithChildren) {
   const t = useTheme();
-  const { state, mode, setMode, error, refresh } = useRecords();
+  const { state, mode, setMode, error, refresh, connected } = useRecords();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   if (!state) return <LoadingRecords />;
@@ -213,7 +213,7 @@ export function Shell({ children }: React.PropsWithChildren) {
             >
               <ShieldCheck size={14} color={t.muted} />
               <Copy size={11} muted>
-                On this device
+                {connected ? 'Connected space' : 'On this device'}
               </Copy>
             </View>
           </View>
@@ -250,6 +250,16 @@ export function Shell({ children }: React.PropsWithChildren) {
                 onPress={() => void refresh()}
               />
             </View>
+          )}
+          {connected && (
+            <Link href="/connections" asChild>
+              <Pressable
+                accessibilityRole="link"
+                style={{ paddingVertical: 12, marginBottom: 12 }}
+              >
+                <Copy size={14}>Connections & pending changes →</Copy>
+              </Pressable>
+            </Link>
           )}
           {children}
           <View

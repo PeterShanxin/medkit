@@ -13,6 +13,14 @@ import { createDemo } from '../application/demo';
 import { type Command } from '../domain/commands';
 import { emptyState, type State } from '../domain/model';
 import { openStore } from '../storage/open';
+import {
+  restoreConnection,
+  signInConnection,
+  signOutConnection,
+  watchConnection,
+} from '../storage/connection';
+import { ConnectedService } from '../storage/connected-client';
+type RecordsService = MedkitService | ConnectedService;
 
 export const uuid = randomUUID;
 interface StoreContext {
@@ -25,6 +33,9 @@ interface StoreContext {
   run(commands: Command[], operationId?: string): Promise<void>;
   exportRecords(): Promise<string>;
   erase(): Promise<void>;
+  connected: boolean;
+  connect(key: string, upload: boolean): Promise<void>;
+  disconnect(): Promise<void>;
 }
 const Context = createContext<StoreContext | null>(null);
 
@@ -46,7 +57,7 @@ function SessionProvider({
   setMode(mode: State['dataset']): void;
 }>) {
   const [state, setState] = useState<State | null>(null);
-  const [service, setService] = useState<MedkitService | null>(null);
+  const [service, setService] = useState<RecordsService | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -60,17 +71,24 @@ function SessionProvider({
 
   useEffect(() => {
     let active = true;
-    let current: MedkitService | undefined;
+    let current: RecordsService | undefined;
     setError('');
-    void openStore(`medkit-${mode}`)
-      .then(async (store) => {
-        current = new MedkitService(store, () =>
-          mode === 'demo' ? createDemo(uuid) : emptyState(uuid()),
-        );
+    void (async () => {
+      const connected = mode === 'personal' ? await restoreConnection() : null;
+      if (connected) return connected;
+      return new MedkitService(await openStore(`medkit-${mode}`), () =>
+        mode === 'demo' ? createDemo(uuid) : emptyState(uuid()),
+      );
+    })()
+      .then(async (opened) => {
+        current = opened;
         const records = await current.load();
         if (active) {
           setService(current);
           setState(records);
+          setError(
+            current instanceof ConnectedService ? current.syncError : '',
+          );
         } else current.close();
       })
       .catch(() => {
@@ -92,7 +110,7 @@ function SessionProvider({
     }
     try {
       setState(await service.load());
-      setError('');
+      setError(service instanceof ConnectedService ? service.syncError : '');
     } catch {
       setError('Your records could not be refreshed. Try again.');
     }
@@ -110,13 +128,28 @@ function SessionProvider({
   }, [refresh, channel]);
   useEffect(() => () => channel?.close(), [channel]);
 
+  useEffect(
+    () =>
+      watchConnection(() => {
+        setState(null);
+        setService(null);
+        setAttempt((value) => value + 1);
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (!(service instanceof ConnectedService)) return;
+    const timer = setInterval(() => void refresh(), 15_000);
+    return () => clearInterval(timer);
+  }, [service, refresh]);
+
   const run = async (commands: Command[], operationId = uuid()) => {
     if (!service)
       throw new Error('Records are still loading. Try again shortly.');
     setBusy(true);
     try {
       setState(await service.execute({ operationId, commands }));
-      setError('');
+      setError(service instanceof ConnectedService ? service.syncError : '');
       channel?.postMessage('changed');
     } finally {
       setBusy(false);
@@ -143,6 +176,22 @@ function SessionProvider({
         refresh,
         run,
         erase,
+        connected: service instanceof ConnectedService,
+        connect: async (key, upload) => {
+          if (!service || mode !== 'personal')
+            throw new Error('Return to your own records before connecting.');
+          const snapshot = upload ? await service.export() : undefined;
+          await signInConnection(key, snapshot);
+          setState(null);
+          setService(null);
+          setAttempt((value) => value + 1);
+        },
+        disconnect: async () => {
+          await signOutConnection(() => service?.close());
+          setState(null);
+          setService(null);
+          setAttempt((value) => value + 1);
+        },
         exportRecords: async () => {
           if (!service) throw new Error('Records are still loading.');
           return service.export();

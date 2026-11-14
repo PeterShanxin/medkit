@@ -9,7 +9,8 @@ Read [coding standards](CODING_STANDARDS.md), [writing guidance](WRITING_GUIDE.m
 - `src/application/`: persistence orchestration, queries, and advisor services.
 - `src/storage/`: IndexedDB on Web; SQLite on iOS and Android.
 - `src/ui/`: reusable controls, forms, and feature screens.
-- `integrations/`: optional provider and read-only MCP adapters.
+- `integrations/`: optional provider, read-only stdio MCP, and connected HTTP server. Read [integration boundaries](INTEGRATIONS.md) before changing authorization or write tools.
+- `src/application/connected/`: change requests and human review contracts. Server and UI must reuse domain transitions.
 - `tests/` and `e2e/`: domain, integration, and browser verification.
 
 ## Working method

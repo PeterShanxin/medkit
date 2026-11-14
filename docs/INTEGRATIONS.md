@@ -59,3 +59,50 @@ Revocation cannot recall responses already returned. Deleting records in the app
 Official [Sign in with ChatGPT documentation](https://developers.openai.com/siwc) and the [quickstart](https://developers.openai.com/siwc/quickstart) were reviewed on 2026-11-09. Eligible client integrations can request supported ChatGPT-powered access, subject to registration and current eligibility. Identity, inference authorization, and MCP access are separate. Sign-in does not imply access to conversation history, memories, or unrestricted API usage.
 
 MedKit has no registered OAuth client, tested sign-in flow, or model inference integration. Those capabilities remain unimplemented. Any future adapter must keep secrets off distributed clients and obtain explicit consent before transmitting the minimum necessary health context.
+
+## Connected Web and HTTP MCP
+
+The optional Node server hosts the Web app and a Streamable HTTP MCP endpoint at `/mcp`. Connected Web sessions and MCP read the same server records. It adds `prepare_record_change` and `get_record_change_status` to the nine read tools. The local stdio adapter remains read-only.
+
+A prepared change is **not a saved medical record**. The server returns a review URL. The owner opens that URL in MedKit, checks every field, and selects **Confirm and save**. MCP tokens cannot call the owner confirmation API. Requests expire after ten minutes and require a fresh review after any intervening record change. A stable request ID prevents duplicate preparations; repeated approval does not apply a second stock deduction. Corrections preserve the original dose and return stock only when explicitly requested.
+
+Supported changes: add medicine with its first batch, add another batch, record an actual dose, start an episode with symptoms, add a symptom, record recovery, adjust counted stock, and void an incorrect dose. No tool creates diagnoses or changes prescription plans. Extracted medicine labels and classifications remain unverified. Photo extraction itself is not implemented.
+
+### Run a private connected server
+
+Use Node.js 24.22 or later in the Node 24 line, a private persistent disk, and one server process. Ephemeral/serverless filesystems are not supported. No hosting service, public endpoint, backups, or live ChatGPT connection is provisioned by this repository.
+
+1. Build with `npm ci` and `npm run build:web`.
+2. Set `MEDKIT_DATABASE` to an absolute file path **outside the checkout**, in an owner-only directory. On Windows, protect the directory with account ACLs; Unix mode bits do not configure Windows ACLs.
+3. Run `npm run server:account`. Store the printed access key privately. This is an owner credential, not an MCP token. Never paste it into an AI conversation or commit it. Each invocation creates a separate account.
+4. Create a private OAuth client configuration file outside the checkout. Register only clients you intend to use. Use the exact callback shown by that client's connection setup:
+
+```json
+[
+  {
+    "client_id": "medkit-personal-client",
+    "client_name": "My AI client",
+    "redirect_uris": ["https://REPLACE-WITH-EXACT-CLIENT-CALLBACK"]
+  }
+]
+```
+
+5. Set `MEDKIT_OAUTH_CLIENTS` to that file. Set `MEDKIT_BASE_URL` to the public HTTPS origin with no path, query, or fragment. Set `PORT` to the internal port (default `4174`). Run `npm run server`.
+6. Terminate HTTPS at a trusted reverse proxy and forward to `127.0.0.1:4174`. Preserve the public `Host` header. Do not expose the backend port directly. Do not log cookies, Authorization headers, request bodies, OAuth codes, or consent URLs. The app deliberately does not trust forwarded IP headers; its rate limits apply to the proxy address as an aggregate.
+7. Open the hosted Web app, go to **Settings → Manage connections**, and enter the owner access key. Choose **Keep separate** unless you intend to upload this browser's local records. Upload is explicit, limited to an empty connected account, and cannot overwrite existing server records. The native app is not synchronized.
+
+For local synthetic testing only, `MEDKIT_BASE_URL=http://127.0.0.1:4174` permits HTTP on loopback. Exact loopback OAuth callbacks are allowed in this mode. Public HTTP origins and wildcard callbacks are rejected.
+
+The server has no account recovery UI or key-rotation command. Protect the owner key and database together. Stop the server and back up the private database directory, including any SQLite WAL files, before upgrades. Test restoration privately. Unknown database schema versions fail closed. Do not store this database on a shared network filesystem.
+
+### Authorize an AI client
+
+Use the server's HTTPS `/mcp` URL, OAuth, and the configured client ID. This server supports **pre-registered public OAuth clients with PKCE S256**. It does not offer dynamic registration, CIMD, or client-secret authentication. A client that requires those methods needs a separate tested adapter.
+
+Discovery is provided at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`. The exact `/mcp` URL is the required OAuth `resource` at authorization and token exchange. Callback URLs match the configured allowlist exactly. The server does not advertise RFC 9207 issuer-response support; use the callback supplied for that configuration rather than assuming a universal ChatGPT callback.
+
+The consent screen lists read permissions and leaves write permission unchecked. All four read scopes plus `records:write` are currently required to prepare a change, because its review can include related medicine, dose, and episode context. Only explicitly requested scopes can be granted. Access tokens expire after 15 minutes. Refresh tokens rotate; replay revokes the whole connection. Connections expire after 30 days. Owner browser sessions expire after eight hours and use HttpOnly, SameSite cookies with Secure enabled for HTTPS. Reconnect from Connections when a session expires.
+
+Revoke a client in **Connections** to deny subsequent calls and reject its pending requests. Deleting connected records revokes every client and clears pending requests. Signing out clears this browser's downloaded copy but retains server records and authorized clients. It does not sign out other browser sessions. Revocation cannot recall data already returned to a model provider.
+
+Current official references checked on 2026-11-14: [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth) and [custom MCP connections](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt). Account eligibility and client surfaces vary. A synthetic SDK test does not prove ChatGPT or OpenClaw compatibility. Before using real records, test the full authorization, prepare, owner confirmation, readback, expiry, and revocation flow in the intended client. ChatGPT Android behavior remains unverified.

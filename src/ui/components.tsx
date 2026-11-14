@@ -15,6 +15,7 @@ import {
 import { Check, ChevronDown, X, type LucideIcon } from 'lucide-react-native';
 import { ZodError } from 'zod';
 import { fonts, useTheme } from './theme';
+import { hasConnection } from '../storage/connection';
 import { useRecords, uuid } from './store';
 
 export function Copy({
@@ -158,6 +159,7 @@ export function Field({
   keyboard = 'default',
   hint,
   testID,
+  secure = false,
 }: {
   label: string;
   value: string;
@@ -167,6 +169,7 @@ export function Field({
   keyboard?: 'default' | 'decimal-pad';
   hint?: string;
   testID?: string;
+  secure?: boolean;
 }) {
   const t = useTheme();
   return (
@@ -184,6 +187,8 @@ export function Field({
         multiline={multiline}
         keyboardType={keyboard}
         autoCapitalize="none"
+        secureTextEntry={secure}
+        autoCorrect={!secure}
         style={{
           fontFamily: fonts.regular,
           fontSize: 16,
@@ -527,7 +532,7 @@ export function FormDialog({
 }
 
 export function LoadingRecords() {
-  const { error, refresh } = useRecords();
+  const { error, refresh, disconnect } = useRecords();
   const t = useTheme();
   return (
     <View
@@ -547,6 +552,13 @@ export function LoadingRecords() {
         <>
           <Notice>{error}</Notice>
           <Button label="Retry" onPress={() => void refresh()} />
+          {hasConnection() && (
+            <Button
+              label="Sign out of connected space"
+              kind="quiet"
+              onPress={() => void disconnect().catch(() => refresh())}
+            />
+          )}
         </>
       ) : (
         <>

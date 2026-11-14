@@ -10,6 +10,14 @@ export interface RecordStore {
   close(): void;
 }
 
+export function applyRecordMutation(
+  current: State,
+  mutation: Mutation,
+  now: string,
+): State {
+  return transition(validateState(current), mutation, now);
+}
+
 export class MedkitService {
   constructor(
     private store: RecordStore,
@@ -24,11 +32,7 @@ export class MedkitService {
   }
   execute(mutation: Mutation): Promise<State> {
     return this.store.transact((value) =>
-      transition(
-        validateState(value ?? this.initial()),
-        mutation,
-        this.clock(),
-      ),
+      applyRecordMutation(value ?? this.initial(), mutation, this.clock()),
     );
   }
   async export(): Promise<string> {

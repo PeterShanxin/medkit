@@ -41,6 +41,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (['/api/', '/connect/', '/mcp', '/authorize', '/token', '/revoke', '/.well-known/'].some(prefix => url.pathname.startsWith(prefix))) return;
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).catch(() => caches.match('/index.html')));
   } else if (FILES.includes(url.pathname)) {
