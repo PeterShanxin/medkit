@@ -62,7 +62,7 @@ npm audit --omit=dev
 
 `verify` runs strict type checking, formatting checks, unit/integration tests, and the Web build. Browser tests use only synthetic data. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing compatible Chromium installation. A native bundle export is not a native application build or a device test.
 
-See [verification evidence](docs/VERIFICATION.md) and [integration instructions](docs/INTEGRATIONS.md).
+See [verification evidence](docs/VERIFICATION.md), [integration instructions](docs/INTEGRATIONS.md), and the [cloud deployment guide](docs/DEPLOYMENT.md).
 
 ## Your records
 
