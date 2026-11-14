@@ -17,14 +17,12 @@ it('starts the deployment CLI, requires owner authentication, and retains record
   await new Promise<void>((r) => reserve.close(() => r()));
   const env = {
     ...process.env,
-    MEDKIT_BASE_URL: '',
-    RENDER_EXTERNAL_URL: 'https://synthetic.example',
+    MEDKIT_BASE_URL: 'https://synthetic.example',
     MEDKIT_DATABASE: path.join(directory, 'records.sqlite'),
     MEDKIT_OAUTH_CLIENTS_JSON: '[]',
     MEDKIT_BIND_HOST: '0.0.0.0',
     PORT: String(port),
   };
-  delete (env as NodeJS.ProcessEnv).MEDKIT_BASE_URL;
   delete (env as NodeJS.ProcessEnv).MEDKIT_OAUTH_CLIENTS;
   const start = (args: string[] = []) =>
     spawn(

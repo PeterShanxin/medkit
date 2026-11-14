@@ -6,3 +6,7 @@ test-results
 playwright-report
 package-lock.json
 LICENSE
+
+.wrangler
+dist-native
+wrangler.production.jsonc

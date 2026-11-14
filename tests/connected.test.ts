@@ -1,3 +1,4 @@
+import { openDatabase } from '../integrations/server/sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -7,7 +8,6 @@ import path from 'node:path';
 import type { Express } from 'express';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Database } from '../integrations/server/database';
 import { createServerApp } from '../integrations/server/app';
 import { Identity } from '../integrations/server/identity';
 import { Records } from '../integrations/server/records';
@@ -23,7 +23,7 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 async function setup() {
-  const db = new Database(':memory:');
+  const db = openDatabase(':memory:');
   cleanup.push(() => db.close());
   let app: Express;
   const listener = createServer((req, res) => app(req, res));
@@ -46,10 +46,10 @@ async function setup() {
     ],
   });
   app = services.app;
-  const a = services.identity.provision(),
-    b = services.identity.provision();
+  const a = await services.identity.provision(),
+    b = await services.identity.provision();
   const f = fixture();
-  services.records.import(a.subject, {
+  await services.records.import(a.subject, {
     format: 'medkit',
     exportedAt: now,
     state: f.state,
@@ -180,73 +180,81 @@ describe('connected record integrity', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'medkit-connected-'));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'records.sqlite');
-    let db = new Database(file);
-    const { subject } = new Identity(db).provision();
+    let db = openDatabase(file);
+    const { subject } = await new Identity(db).provision();
     const f = fixture();
     const records = new Records(db, () => now);
-    records.import(subject, {
+    await records.import(subject, {
       format: 'medkit',
       exportedAt: now,
       state: f.state,
     });
-    const proposal = records.propose(subject, randomUUID(), 'Test', {
+    const proposal = await records.propose(subject, randomUUID(), 'Test', {
       requestId: randomUUID(),
       userStatement: 'I took a tablet.',
       change: { kind: 'record_dose', dose: f.dose().data },
     });
-    expect(db.records(subject).state.doses).toHaveLength(0);
-    records.decide(subject, proposal.id, true, () => {});
-    records.decide(subject, proposal.id, true, () => {});
+    expect((await db.records(subject)).state.doses).toHaveLength(0);
+    await records.decide(subject, proposal.id, true, () => {});
+    await records.decide(subject, proposal.id, true, () => {});
     db.close();
-    db = new Database(file);
+    db = openDatabase(file);
     cleanup.push(() => db.close());
-    expect(db.records(subject).state.doses).toHaveLength(1);
-    expect(db.records(subject).state.batches[0]!.quantity).toBe(9);
+    expect((await db.records(subject)).state.doses).toHaveLength(1);
+    expect((await db.records(subject)).state.batches[0]!.quantity).toBe(9);
   });
   it('checks versions, payload-bound idempotency, invalid units and failed writes', async () => {
     const s = await setup();
-    const version = s.db.records(s.a.subject).version;
+    const version = (await s.db.records(s.a.subject)).version;
     const mutation = {
       operationId: randomUUID(),
       commands: [s.f.dose()],
       version,
     };
-    s.records.execute(s.a.subject, mutation);
-    s.records.execute(s.a.subject, mutation);
-    expect(s.db.records(s.a.subject).state.batches[0]!.quantity).toBe(9);
-    expect(() =>
-      s.records.execute(s.a.subject, { ...mutation, commands: [s.f.dose(2)] }),
-    ).toThrow('different change');
-    expect(() =>
-      s.records.execute(s.a.subject, {
-        ...mutation,
-        operationId: randomUUID(),
-      }),
-    ).toThrow('Records changed');
+    await s.records.execute(s.a.subject, mutation);
+    await s.records.execute(s.a.subject, mutation);
+    expect((await s.db.records(s.a.subject)).state.batches[0]!.quantity).toBe(
+      9,
+    );
+    await expect(
+      async () =>
+        await s.records.execute(s.a.subject, {
+          ...mutation,
+          commands: [s.f.dose(2)],
+        }),
+    ).rejects.toThrow('different change');
+    await expect(
+      async () =>
+        await s.records.execute(s.a.subject, {
+          ...mutation,
+          operationId: randomUUID(),
+        }),
+    ).rejects.toThrow('Records changed');
     const bad = s.f.dose();
     bad.data.unit = 'mL';
-    expect(() =>
-      s.records.execute(s.a.subject, {
-        operationId: randomUUID(),
-        commands: [bad],
-        version: version + 1,
-      }),
-    ).toThrow('unit');
-    expect(s.db.records(s.a.subject).state.doses).toHaveLength(1);
+    await expect(
+      async () =>
+        await s.records.execute(s.a.subject, {
+          operationId: randomUUID(),
+          commands: [bad],
+          version: version + 1,
+        }),
+    ).rejects.toThrow('unit');
+    expect((await s.db.records(s.a.subject)).state.doses).toHaveLength(1);
   });
   it('supports medicine, batches, symptoms, recovery and visible dose corrections through shared transitions', async () => {
     const s = await setup();
     const grant = randomUUID();
-    function apply(change: ProposalInput['change']) {
-      const p = s.records.propose(s.a.subject, grant, 'Test', {
+    async function apply(change: ProposalInput['change']) {
+      const p = await s.records.propose(s.a.subject, grant, 'Test', {
         requestId: randomUUID(),
         userStatement: 'Explicit synthetic owner request',
         change,
       });
-      s.records.decide(s.a.subject, p.id, true, () => {});
-      return s.db.records(s.a.subject).state;
+      await s.records.decide(s.a.subject, p.id, true, () => {});
+      return (await s.db.records(s.a.subject)).state;
     }
-    const state = apply({
+    const state = await apply({
       kind: 'add_medicine',
       medicine: medicineInput,
       batch: {
@@ -261,22 +269,22 @@ describe('connected record integrity', () => {
     const symptoms = [
       { symptom: 'Cough', severity: 'mild' as const, at: now, notes: '' },
     ];
-    let updated = apply({
+    let updated = await apply({
       kind: 'start_episode',
       episode: { title: 'Respiratory symptoms', onsetAt: now, notes: '' },
       symptoms,
     });
     const episodeId = updated.episodes[0]!.id;
-    updated = apply({
+    updated = await apply({
       kind: 'record_symptom',
       observation: { ...symptoms[0]!, episodeId },
     });
     expect(updated.observations).toHaveLength(2);
-    updated = apply({
+    updated = await apply({
       kind: 'record_dose',
       dose: { ...s.f.dose().data, episodeId },
     });
-    updated = apply({
+    updated = await apply({
       kind: 'void_dose',
       doseId: updated.doses[0]!.id,
       reason: 'Duplicate report',
@@ -284,16 +292,16 @@ describe('connected record integrity', () => {
     });
     expect(updated.doses[0]!.voidedAt).not.toBeNull();
     expect(updated.batches[0]!.quantity).toBe(10);
-    updated = apply({ kind: 'resolve_episode', episodeId, at: now });
+    updated = await apply({ kind: 'resolve_episode', episodeId, at: now });
     expect(updated.episodes[0]!.resolvedAt).toBe(now);
-    updated = apply({
+    updated = await apply({
       kind: 'adjust_stock',
       batchId: s.f.batchId,
       quantity: 5,
       reason: 'Counted stock',
     });
     expect(updated.batches[0]!.quantity).toBe(5);
-    updated = apply({
+    updated = await apply({
       kind: 'add_batch',
       batch: {
         medicineId: s.f.medicineId,
@@ -310,17 +318,22 @@ describe('connected record integrity', () => {
 
 it('rolls back stock and proposal status when the commit audit fails', async () => {
   const s = await setup();
-  const p = s.records.propose(s.a.subject, randomUUID(), 'Test', s.input());
+  const p = await s.records.propose(
+    s.a.subject,
+    randomUUID(),
+    'Test',
+    s.input(),
+  );
   const spy = vi.spyOn(s.db, 'audit').mockImplementationOnce(() => {
     throw new Error('Disk write failed');
   });
-  expect(() => s.records.decide(s.a.subject, p.id, true, () => {})).toThrow(
-    'Disk write failed',
-  );
+  await expect(
+    async () => await s.records.decide(s.a.subject, p.id, true, () => {}),
+  ).rejects.toThrow('Disk write failed');
   spy.mockRestore();
-  expect(s.db.records(s.a.subject).state.doses).toHaveLength(0);
-  expect(s.db.records(s.a.subject).state.batches[0]!.quantity).toBe(10);
-  expect(s.records.list(s.a.subject)[0]!.status).toBe('pending');
+  expect((await s.db.records(s.a.subject)).state.doses).toHaveLength(0);
+  expect((await s.db.records(s.a.subject)).state.batches[0]!.quantity).toBe(10);
+  expect((await s.records.list(s.a.subject))[0]!.status).toBe('pending');
 });
 
 describe('OAuth and HTTP MCP', () => {
@@ -391,7 +404,7 @@ describe('OAuth and HTTP MCP', () => {
     const cookie = await s.login();
     const erased = await s.request(
       '/api/erase',
-      { version: s.db.records(s.a.subject).version },
+      { version: (await s.db.records(s.a.subject)).version },
       { cookie },
     );
     expect(erased.status).toBe(200);
@@ -403,7 +416,7 @@ describe('OAuth and HTTP MCP', () => {
     });
     expect((await s.exchange(fields(deleted))).status).toBe(400);
     expect((await s.exchange(fields(other))).status).toBe(200);
-    expect(s.oauth.list(s.a.subject)).toHaveLength(0);
+    expect(await s.oauth.list(s.a.subject)).toHaveLength(0);
     const fresh = await s.authorization();
     expect((await s.exchange(fields(fresh))).status).toBe(200);
   });
@@ -424,7 +437,7 @@ describe('OAuth and HTTP MCP', () => {
     };
     expect(p.review.status).toBe('pending');
     expect(p.recorded).toBe(false);
-    expect(s.db.records(s.a.subject).state.doses).toHaveLength(0);
+    expect((await s.db.records(s.a.subject)).state.doses).toHaveLength(0);
     const duplicate = await client.callTool({
       name: 'prepare_record_change',
       arguments: input,
@@ -481,7 +494,9 @@ describe('OAuth and HTTP MCP', () => {
     expect((doses.structuredContent as { data: unknown[] }).data).toHaveLength(
       1,
     );
-    expect(s.db.records(s.a.subject).state.batches[0]!.quantity).toBe(9);
+    expect((await s.db.records(s.a.subject)).state.batches[0]!.quantity).toBe(
+      9,
+    );
     expect(
       (await (await s.request('/api/records', undefined, { cookie })).json())
         .state.doses,
@@ -513,7 +528,7 @@ describe('OAuth and HTTP MCP', () => {
         .structuredContent,
     ).toMatchObject({ data: [] });
     const cookie = await s.login();
-    const connection = s.oauth.access(read.access_token);
+    const connection = await s.oauth.access(read.access_token);
     expect(
       (
         await s.request(
@@ -554,74 +569,80 @@ describe('OAuth and HTTP MCP', () => {
         })
       ).status,
     ).toBe(400);
-    expect(() => s.oauth.access(second.access_token)).toThrow();
+    await expect(
+      async () => await s.oauth.access(second.access_token),
+    ).rejects.toThrow();
   });
   it('rejects stale, expired and revoked proposals, and deletes records while revoking clients', async () => {
     const s = await setup();
     const token = await s.tokens();
-    const grant = s.oauth.access(token.access_token);
-    const p = s.records.propose(
+    const grant = await s.oauth.access(token.access_token);
+    const p = await s.records.propose(
       s.a.subject,
       grant.id,
       grant.clientName,
       s.input(),
     );
-    const current = s.db.records(s.a.subject);
-    s.records.execute(s.a.subject, {
+    const current = await s.db.records(s.a.subject);
+    await s.records.execute(s.a.subject, {
       operationId: randomUUID(),
       commands: [s.f.dose()],
       version: current.version,
     });
-    expect(() => s.records.decide(s.a.subject, p.id, true, () => {})).toThrow(
-      'expired or records changed',
-    );
+    await expect(
+      async () => await s.records.decide(s.a.subject, p.id, true, () => {}),
+    ).rejects.toThrow('expired or records changed');
     const late = new Records(s.db, () =>
       new Date(Date.now() + 11 * 60_000).toISOString(),
     );
-    const fresh = s.records.propose(
+    const fresh = await s.records.propose(
       s.a.subject,
       grant.id,
       grant.clientName,
       s.input(),
     );
-    expect(() => late.decide(s.a.subject, fresh.id, true, () => {})).toThrow(
-      'expired',
-    );
+    await expect(
+      async () => await late.decide(s.a.subject, fresh.id, true, () => {}),
+    ).rejects.toThrow('expired');
     const cookie = await s.login();
     const response = await s.request(
       '/api/erase',
-      { version: s.db.records(s.a.subject).version },
+      { version: (await s.db.records(s.a.subject)).version },
       { cookie },
     );
     expect(response.status).toBe(200);
-    expect(s.db.records(s.a.subject).state.medicines).toHaveLength(0);
-    expect(s.records.list(s.a.subject)).toHaveLength(0);
-    expect(() => s.oauth.access(token.access_token)).toThrow();
+    expect((await s.db.records(s.a.subject)).state.medicines).toHaveLength(0);
+    expect(await s.records.list(s.a.subject)).toHaveLength(0);
+    await expect(
+      async () => await s.oauth.access(token.access_token),
+    ).rejects.toThrow();
   });
   it('does not overwrite an existing connected space or import demo records', async () => {
     const s = await setup();
-    expect(() =>
-      s.records.import(s.a.subject, {
-        format: 'medkit',
-        exportedAt: now,
-        state: s.f.state,
-      }),
-    ).toThrow('cannot overwrite');
-    expect(() =>
-      s.records.import(s.b.subject, {
-        format: 'medkit',
-        exportedAt: now,
-        state: emptyState(randomUUID(), 'demo'),
-      }),
-    ).toThrow('Sample data');
+    await expect(
+      async () =>
+        await s.records.import(s.a.subject, {
+          format: 'medkit',
+          exportedAt: now,
+          state: s.f.state,
+        }),
+    ).rejects.toThrow('cannot overwrite');
+    await expect(
+      async () =>
+        await s.records.import(s.b.subject, {
+          format: 'medkit',
+          exportedAt: now,
+          state: emptyState(randomUUID(), 'demo'),
+        }),
+    ).rejects.toThrow('Sample data');
   });
 });
 
 it('rejects pending requests when their external grant is revoked', async () => {
   const s = await setup();
   const token = await s.tokens();
-  const grant = s.oauth.access(token.access_token);
-  const proposal = s.records.propose(
+  const grant = await s.oauth.access(token.access_token);
+  const proposal = await s.records.propose(
     s.a.subject,
     grant.id,
     grant.clientName,
@@ -630,7 +651,8 @@ it('rejects pending requests when their external grant is revoked', async () => 
   const cookie = await s.login();
   await s.request(`/api/connections/${grant.id}/revoke`, {}, { cookie });
   expect(
-    s.records.list(s.a.subject).find((p) => p.id === proposal.id)?.status,
+    (await s.records.list(s.a.subject)).find((p) => p.id === proposal.id)
+      ?.status,
   ).toBe('rejected');
   expect(
     (
@@ -646,8 +668,8 @@ it('rejects pending requests when their external grant is revoked', async () => 
 it('does not expose proposal details through a refresh token with reduced read permissions', async () => {
   const s = await setup();
   const full = await s.tokens();
-  const grant = s.oauth.access(full.access_token);
-  const proposal = s.records.propose(
+  const grant = await s.oauth.access(full.access_token);
+  const proposal = await s.records.propose(
     s.a.subject,
     grant.id,
     grant.clientName,

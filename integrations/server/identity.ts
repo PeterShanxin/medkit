@@ -10,41 +10,37 @@ export class Identity {
     private db: Database,
     private now = Date.now,
   ) {}
-  provision() {
+  async provision() {
     const subject = randomUUID(),
       key = secret();
-    this.db.atomic(() => {
-      this.db.put('owners', hash(key), { subject });
-      this.db.initialize(subject);
+    await this.db.atomic(async () => {
+      await this.db.put('owners', hash(key), { subject });
+      await this.db.initialize(subject);
     });
     return { subject, key };
   }
-  login(key: string) {
-    const owner = this.db.get('owners', hash(key), ownerSchema);
+  async login(key: string) {
+    const owner = await this.db.get('owners', hash(key), ownerSchema);
     if (!owner) throw new RequestError(401, 'The access key is invalid.');
-    this.db.removeWhere(
-      'sessions',
-      (value) => sessionSchema.parse(value).expiresAt <= this.now(),
-    );
     const token = secret();
-    this.db.put('sessions', hash(token), {
+    await this.db.put('sessions', hash(token), {
       subject: owner.subject,
       expiresAt: this.now() + 8 * 60 * 60_000,
     });
     return { subject: owner.subject, token };
   }
-  owner(key: string) {
-    const owner = this.db.get('owners', hash(key), ownerSchema);
+  async owner(key: string) {
+    const owner = await this.db.get('owners', hash(key), ownerSchema);
     if (!owner) throw new RequestError(401, 'The access key is invalid.');
     return owner.subject;
   }
-  session(token: string) {
-    const session = this.db.get('sessions', hash(token), sessionSchema);
+  async session(token: string) {
+    const session = await this.db.get('sessions', hash(token), sessionSchema);
     if (!session || session.expiresAt <= this.now())
       throw new RequestError(401, 'Sign in again to access this space.');
     return session.subject;
   }
-  logout(token: string) {
-    this.db.delete('sessions', hash(token));
+  async logout(token: string) {
+    await this.db.delete('sessions', hash(token));
   }
 }
