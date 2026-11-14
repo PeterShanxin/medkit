@@ -78,6 +78,12 @@ export class Database {
       .prepare('SELECT * FROM entries WHERE namespace=?')
       .bind(namespace)
       .all<Row>();
+    // Range validation protects these cached rows, including against insert/delete phantoms.
+    // Reuse them for later point reads so bulk revocation stays within D1 invocation limits.
+    for (const row of results) {
+      const id = rowKey(namespace, row.key);
+      if (tx && !tx.cache.has(id)) tx.cache.set(id, row);
+    }
     const rows = new Map(results.map((row) => [row.key, row]));
     for (const row of tx?.writes.values() ?? [])
       if (row.namespace === namespace) {

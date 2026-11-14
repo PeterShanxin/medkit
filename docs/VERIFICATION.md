@@ -51,7 +51,7 @@ Executed on 2026-11-14 with synthetic data:
 
 - TypeScript checks passed for the app/Node code and the separate Worker runtime types.
 - 71 unit/integration tests passed, including migration of existing Node databases and rollback of oversized writes.
-- Seven compiled Worker/D1 tests passed in workerd through Miniflare. They exercise static/API routing, OAuth consent and PKCE, the actual MCP SDK client, concurrent dose confirmation, cross-account isolation, grant revocation, authorization-code and refresh-token races, transaction rollback, authorization changes during commit, deletion of a long history, and account/session/dose persistence across a Worker restart.
+- Nine compiled Worker/D1 tests passed in workerd through Miniflare. They exercise static/API routing, OAuth consent and PKCE, the actual MCP SDK client, concurrent dose confirmation, cross-account isolation, grant revocation, authorization-code and refresh-token races, transaction rollback, authorization changes during commit, deletion of a long history, and account/session/dose persistence across a Worker restart, query-bounded revocation of 60 historical grants, and shared login throttling for path variants.
 - Wrangler's deployment dry run passed. The Worker bundle was approximately 613 KiB gzip, below the published Free bundle-size limit. This does not establish production CPU usage.
 
 The local D1 migration and private-file account provisioning commands completed successfully. iOS and Android JavaScript/Hermes exports passed; no native device test was performed.

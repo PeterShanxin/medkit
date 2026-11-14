@@ -36,6 +36,7 @@ const appRoute =
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const route = url.pathname.toLowerCase().replace(/\/+$/, '') || '/';
     if (
       url.origin !== base.origin ||
       (request.headers.has('Origin') &&
@@ -45,7 +46,7 @@ export default {
         { error: 'This request origin is not allowed.' },
         { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
-    if (!dynamic.test(url.pathname)) {
+    if (!dynamic.test(route)) {
       const target = appRoute.test(url.pathname)
         ? new Request(new URL('/index.html', url), request)
         : request;
@@ -68,7 +69,7 @@ export default {
     // Cloudflare supplies this header. Do not trust X-Forwarded-For from callers.
     const key = hash(request.headers.get('CF-Connecting-IP') ?? 'local');
     const allowed = await env.REQUEST_LIMIT.limit({ key });
-    const login = ['/api/login', '/connect/approve'].includes(url.pathname);
+    const login = ['/api/login', '/connect/approve'].includes(route);
     if (
       !allowed.success ||
       (login && !(await env.LOGIN_LIMIT.limit({ key })).success)

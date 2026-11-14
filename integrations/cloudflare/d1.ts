@@ -4,7 +4,7 @@ import type {
 } from '@cloudflare/workers-types';
 import { Database, type Statement } from '../server/database';
 
-export function openD1(db: D1Database) {
+export function openD1(db: Pick<D1Database, 'prepare' | 'batch'>) {
   class Query implements Statement {
     constructor(readonly statement: D1PreparedStatement) {}
     bind(...values: (string | number | null)[]) {

@@ -23,7 +23,7 @@ export function openDatabase(file: string) {
         sql.exec('ALTER TABLE entries RENAME TO legacy_entries');
       sql.exec(
         readFileSync(
-          new URL('../cloudflare/migrations/0001_entries.sql', import.meta.url),
+          'integrations/cloudflare/migrations/0001_entries.sql',
           'utf8',
         ),
       );

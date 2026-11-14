@@ -8,6 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { openD1 } from '../../integrations/cloudflare/d1';
 import { Identity } from '../../integrations/server/identity';
+import { OAuth } from '../../integrations/server/oauth';
 import { Records } from '../../integrations/server/records';
 import { connectionScopes } from '../../src/application/connected/contracts';
 import { fixture, now } from '../fixtures';
@@ -336,6 +337,7 @@ it('deletes a long history atomically without one D1 statement per entry', async
 it('retains account, session, dose and stock across a Worker runtime restart', async () => {
   await mf.dispose();
   mf = new Miniflare(runtimeOptions);
+  db = openD1(await mf.getD1Database('DB'));
   const response = await request('/api/records', undefined, { Cookie: cookie });
   expect(response.status, await response.clone().text()).toBe(200);
   const data = (await response.json()) as {
@@ -343,4 +345,59 @@ it('retains account, session, dose and stock across a Worker runtime restart', a
   };
   expect(data.state.doses).toHaveLength(1);
   expect(data.state.batches[0]!.quantity).toBe(9);
+});
+
+it('uses bounded queries to erase an account with many historical grants', async () => {
+  const subject = second.subject;
+  for (let i = 0; i < 60; i++) {
+    const id = randomUUID();
+    await db.put('oauth-grants', id, {
+      id,
+      subject,
+      clientId: 'test-client',
+      clientName: 'Synthetic client',
+      scopes: [...connectionScopes],
+      expiresAt: Date.now() + 60_000,
+      revoked: i % 2 === 0,
+    });
+  }
+  const sql = await mf.getD1Database('DB');
+  let queries = 0;
+  const measured = openD1({
+    prepare: (query) => {
+      queries++;
+      return sql.prepare(query);
+    },
+    batch: (statements) => sql.batch(statements),
+  });
+  const oauth = new OAuth(measured, new URL(base), [
+    {
+      client_id: 'test-client',
+      client_name: 'Synthetic client',
+      redirect_uris: ['http://127.0.0.1/callback'],
+    },
+  ]);
+  await measured.atomic(async () => {
+    const current = await measured.records(subject);
+    await new Records(measured).erase(subject, current.version);
+    await oauth.revokeAll(subject);
+  });
+  expect(queries).toBeLessThanOrEqual(50);
+  expect(await oauth.list(subject)).toEqual([]);
+  expect((await measured.records(account.subject)).state.doses).toHaveLength(1);
+});
+it('shares login throttling across trailing-slash and case variants', async () => {
+  const routes = [
+    '/api/login',
+    '/api/login/',
+    '/api/LOGIN',
+    '/connect/approve/',
+  ];
+  const statuses: number[] = [];
+  for (let i = 0; i < 11; i++)
+    statuses.push((await request(routes[i % routes.length]!, {})).status);
+  expect(statuses[0]).toBe(400);
+  expect(statuses[10]).toBe(429);
+  for (const route of [...routes, '/API/LOGIN', '/CONNECT/APPROVE/'])
+    expect((await request(route, {})).status).toBe(429);
 });
