@@ -427,23 +427,36 @@ export function createServerApp(options: ServerOptions) {
           key: z.string().max(100).optional(),
           allowWrite: z.literal('yes').optional(),
           decision: z.enum(['allow', 'deny']),
-          expectedSubject: idSchema.optional(),
+          expectedSubject: z
+            .union([idSchema, z.literal('signed-out')])
+            .optional(),
         })
         .strict()
         .parse(req.body);
       const redirect = await db.atomic(async () => {
         let subject = '';
         if (input.decision === 'allow') {
+          let current: string | undefined;
           try {
-            subject = await owner(req);
-          } catch {
-            subject = await identity.owner(input.key ?? '');
+            current = await owner(req);
+          } catch (error) {
+            if (!(error instanceof RequestError) || error.status !== 401)
+              throw error;
           }
-          if (input.expectedSubject && input.expectedSubject !== subject)
+          if (
+            !input.expectedSubject ||
+            (input.expectedSubject === 'signed-out'
+              ? current !== undefined
+              : current !== input.expectedSubject)
+          )
             throw new RequestError(
               409,
               'The signed-in account changed. Restart this connection from your AI client.',
             );
+          subject =
+            input.expectedSubject === 'signed-out'
+              ? await identity.owner(input.key ?? '')
+              : current!;
         }
         return oauth.consent(
           input.request,
@@ -473,16 +486,7 @@ export function createServerApp(options: ServerOptions) {
   );
   app.post(
     '/mcp',
-    async (req, _res, next) => {
-      try {
-        await oauth.verifyAccessToken(
-          req.headers.authorization?.replace(/^Bearer /i, '') ?? '',
-        );
-      } catch {
-        await db.audit('unauthenticated', 'mcp.access', 'unknown', 'denied');
-      }
-      next();
-    },
+    // Unauthenticated traffic must not consume persistent audit storage or D1 writes.
     requireBearerAuth({
       verifier: oauth,
       expectedResource: oauth.resource,
@@ -498,16 +502,11 @@ export function createServerApp(options: ServerOptions) {
         tool: string,
         action: (grant: RemoteGrant) => Promise<T>,
       ): Promise<T> => {
-        try {
-          return await db.atomic(async () => {
-            const grant = await oauth.access(token, scopes);
-            await db.audit(grant.subject, tool, grant.id, 'allowed');
-            return action(grant);
-          });
-        } catch (error) {
-          await db.audit('unauthenticated', tool, 'unknown', 'denied');
-          throw error;
-        }
+        return db.atomic(async () => {
+          const grant = await oauth.access(token, scopes);
+          await db.audit(grant.subject, tool, grant.id, 'allowed');
+          return action(grant);
+        });
       };
       const writer = {
         reviewUrl: new URL('/connections', base).href,

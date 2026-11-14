@@ -84,6 +84,7 @@ async function authorize(key = account.key) {
   expect(await consent.text()).toContain('Connect Synthetic client');
   const approved = await request('/connect/approve', {
     request: new URL(location, base).searchParams.get('request'),
+    expectedSubject: 'signed-out',
     key,
     decision: 'allow',
     allowWrite: 'yes',
@@ -213,6 +214,49 @@ it('serves the built app and keeps private routes out of static fallback', async
   expect(
     (await request('/api/records', undefined, { Cookie: cookie })).status,
   ).toBe(200);
+});
+it('rejects invalid MCP traffic without D1 audit growth and rejects stale signed-out consent', async () => {
+  const headers = { 'CF-Connecting-IP': '192.0.2.77' };
+  for (let i = 0; i < 5; i++) {
+    expect(
+      (
+        await request(
+          '/mcp',
+          {},
+          { ...headers, Authorization: `Bearer invalid-${i}` },
+        )
+      ).status,
+    ).toBe(401);
+  }
+  expect(await db.list('audit:unauthenticated', z.unknown())).toHaveLength(0);
+  const start = await request(
+    '/authorize?' +
+      new URLSearchParams({
+        response_type: 'code',
+        client_id: 'test-client',
+        redirect_uri: 'http://127.0.0.1/callback',
+        code_challenge: createHash('sha256')
+          .update('v'.repeat(64))
+          .digest('base64url'),
+        code_challenge_method: 'S256',
+        scope: 'cabinet:read',
+        resource: base + '/mcp',
+      }),
+  );
+  const location = start.headers.get('location')!;
+  const html = await (await request(location)).text();
+  expect(html).toContain('name="expectedSubject" value="signed-out"');
+  const result = await request(
+    '/connect/approve',
+    {
+      request: new URL(location, base).searchParams.get('request'),
+      key: second.key,
+      expectedSubject: 'signed-out',
+      decision: 'allow',
+    },
+    { ...headers, Cookie: cookie },
+  );
+  expect(result.status).toBe(409);
 });
 it('completes GitHub browser sign-in through the compiled Worker and rejects callback replay', async () => {
   const headers = { 'CF-Connecting-IP': '192.0.2.44' };

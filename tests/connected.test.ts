@@ -104,6 +104,7 @@ async function setup() {
     const pending = new URL(location, base).searchParams.get('request')!;
     const approval = await request('/connect/approve', {
       request: pending,
+      expectedSubject: 'signed-out',
       key,
       decision: 'allow',
       ...(write ? { allowWrite: 'yes' } : {}),

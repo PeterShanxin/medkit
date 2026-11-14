@@ -236,6 +236,89 @@ it('binds old browser actions to the displayed account before changing records',
   expect((await s.db.records(a.subject)).state.medicines).toHaveLength(1);
   expect((await s.db.records(b.subject)).state.medicines).toHaveLength(0);
 });
+it('rejects signed-out consent after another tab signs in and keeps the requested account binding', async () => {
+  const s = await setup(),
+    b = await s.guest();
+  const authorization = await fetch(
+    s.base +
+      '/authorize?' +
+      new URLSearchParams({
+        response_type: 'code',
+        client_id: 'test-client',
+        redirect_uri: 'http://127.0.0.1/callback',
+        code_challenge: createHash('sha256')
+          .update('v'.repeat(64))
+          .digest('base64url'),
+        code_challenge_method: 'S256',
+        scope: 'cabinet:read',
+        resource: s.base + '/mcp',
+      }),
+    { redirect: 'manual' },
+  );
+  const location = new URL(authorization.headers.get('location')!, s.base);
+  const request = location.searchParams.get('request')!;
+  const html = await (await fetch(location)).text();
+  expect(html).toContain('name="expectedSubject" value="signed-out"');
+  const approve = (cookie?: string, expectedSubject?: string) =>
+    fetch(s.base + '/connect/approve', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        Origin: s.base,
+        'Content-Type': 'application/json',
+        ...(cookie ? { Cookie: `medkit_session=${cookie}` } : {}),
+      },
+      body: JSON.stringify({
+        request,
+        key: s.admin.key,
+        decision: 'allow',
+        expectedSubject,
+      }),
+    });
+  expect((await approve(b.token, 'signed-out')).status).toBe(409);
+  expect((await approve(b.token)).status).toBe(409);
+  expect((await approve(undefined, b.subject)).status).toBe(409);
+  expect(await s.services.oauth.list(b.subject)).toHaveLength(0);
+  expect(await s.services.oauth.list(s.admin.subject)).toHaveLength(0);
+  const approved = await approve(undefined, 'signed-out');
+  expect(approved.status).toBe(303);
+  const code = new URL(approved.headers.get('location')!).searchParams.get(
+    'code',
+  )!;
+  const exchanged = await fetch(s.base + '/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: 'test-client',
+      redirect_uri: 'http://127.0.0.1/callback',
+      code,
+      code_verifier: 'v'.repeat(64),
+      resource: s.base + '/mcp',
+    }),
+  });
+  expect(exchanged.status).toBe(200);
+  const token = (await exchanged.json()).access_token as string;
+  expect((await s.services.oauth.access(token)).subject).toBe(s.admin.subject);
+  expect(await s.services.oauth.list(s.admin.subject)).toHaveLength(1);
+  expect(await s.services.oauth.list(b.subject)).toHaveLength(0);
+});
+it('rejects invalid MCP tokens without persisting anonymous audit entries', async () => {
+  const s = await setup();
+  const audit = vi.spyOn(s.db, 'audit');
+  for (let i = 0; i < 5; i++) {
+    const response = await fetch(s.base + '/mcp', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer invalid-${i}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    expect(response.status).toBe(401);
+  }
+  expect(audit).not.toHaveBeenCalled();
+});
 it('revokes browser sessions, actual OAuth tokens and pending reviews while retaining the original private records', async () => {
   const s = await setup(),
     a = await s.guest(),
@@ -291,7 +374,12 @@ it('revokes browser sessions, actual OAuth tokens and pending reviews while reta
       Origin: s.base,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ request, decision: 'allow', allowWrite: 'yes' }),
+    body: JSON.stringify({
+      request,
+      decision: 'allow',
+      allowWrite: 'yes',
+      expectedSubject: a.subject,
+    }),
   });
   const code = new URL(approved.headers.get('location')!).searchParams.get(
     'code',
