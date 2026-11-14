@@ -18,6 +18,12 @@ import { OAuth, configuredClientSchema, type RemoteGrant } from './oauth';
 import { Records } from './records';
 import { consentPage } from './consent';
 import { GitHubLogin, githubReturnTo, type GitHubConfig } from './github-login';
+import { Members, lookupGitHubUser } from './members';
+import {
+  githubIdSchema,
+  githubUsernameSchema,
+  memberProfileSchema,
+} from '../../src/application/connected/members';
 
 export interface ServerOptions {
   db: Database;
@@ -83,6 +89,7 @@ export function createServerApp(options: ServerOptions) {
   const github = options.github
     ? new GitHubLogin(db, identity, base, options.github, options.githubFetch)
     : undefined;
+  const members = options.github ? new Members(db, options.github) : undefined;
   const sessionCookie = {
     httpOnly: true,
     secure: base.protocol === 'https:',
@@ -123,10 +130,24 @@ export function createServerApp(options: ServerOptions) {
     }
     next();
   };
-  const owner = async (req: Request) =>
-    await identity.session(sessionToken(req));
+  const owner = async (req: Request) => {
+    const subject = await identity.session(sessionToken(req));
+    if (
+      req.headers['x-medkit-account'] &&
+      req.headers['x-medkit-account'] !== subject
+    )
+      throw new RequestError(
+        409,
+        'The signed-in account changed. Reload MedKit before continuing.',
+      );
+    return subject;
+  };
   app.get('/api/capabilities', (_req, res) =>
-    res.json({ connected: true, githubLogin: !!github }),
+    res.json({
+      connected: true,
+      githubLogin: !!github,
+      mcpUrl: oauth.resource.href,
+    }),
   );
   app.post(
     '/api/login/github',
@@ -222,6 +243,64 @@ export function createServerApp(options: ServerOptions) {
     ownerJson((subject) => ({ subject })),
   );
   app.get(
+    '/api/access',
+    ownerJson((subject) => ({ canInvite: members?.isAdmin(subject) ?? false })),
+  );
+  const host = async (req: Request) => {
+    const subject = await owner(req);
+    if (!members)
+      throw new RequestError(404, 'Invitations are not configured.');
+    members.requireAdmin(subject);
+    return subject;
+  };
+  app.get(
+    '/api/members',
+    ownerJson((subject) => {
+      if (!members)
+        throw new RequestError(404, 'Invitations are not configured.');
+      return members.list(subject);
+    }),
+  );
+  const memberLimit = options.externalRateLimit
+    ? (((_req, _res, next) => next()) as RequestHandler)
+    : rateLimit(10);
+  app.post('/api/members/lookup', sameOrigin, memberLimit, async (req, res) => {
+    await host(req);
+    const { username } = z
+      .object({ username: githubUsernameSchema })
+      .strict()
+      .parse(req.body);
+    const profile = await lookupGitHubUser(username, options.githubFetch);
+    await host(req);
+    res.json(profile);
+  });
+  app.post('/api/members', sameOrigin, memberLimit, async (req, res) => {
+    await host(req);
+    const input = memberProfileSchema.strict().parse(req.body);
+    const profile = await lookupGitHubUser(input.login, options.githubFetch);
+    if (profile.githubId !== input.githubId)
+      throw new RequestError(
+        409,
+        'This GitHub identity changed. Look up the username again.',
+      );
+    const result = await db.atomic(async () =>
+      members!.invite(await host(req), profile),
+    );
+    res.json(result);
+  });
+  app.post('/api/members/:id/revoke', sameOrigin, async (req, res) => {
+    await db.atomic(async () => {
+      const admin = await host(req);
+      return members!.revoke(
+        admin,
+        githubIdSchema.parse(req.params.id),
+        oauth,
+        records,
+      );
+    });
+    res.json({ ok: true });
+  });
+  app.get(
     '/api/records',
     ownerJson((subject) => db.records(subject)),
   );
@@ -297,8 +376,9 @@ export function createServerApp(options: ServerOptions) {
   );
   app.get('/connect/consent', async (req, res) => {
     let signedIn = false;
+    let subject: string | undefined;
     try {
-      await owner(req);
+      subject = await owner(req);
       signedIn = true;
     } catch {
       /* The consent form requests an owner key. */
@@ -324,6 +404,7 @@ export function createServerApp(options: ServerOptions) {
           z.string().max(100).parse(req.query.request),
           signedIn,
           !!github,
+          subject,
         ),
       );
   });
@@ -338,6 +419,7 @@ export function createServerApp(options: ServerOptions) {
           key: z.string().max(100).optional(),
           allowWrite: z.literal('yes').optional(),
           decision: z.enum(['allow', 'deny']),
+          expectedSubject: idSchema.optional(),
         })
         .strict()
         .parse(req.body);
@@ -349,6 +431,11 @@ export function createServerApp(options: ServerOptions) {
           } catch {
             subject = await identity.owner(input.key ?? '');
           }
+          if (input.expectedSubject && input.expectedSubject !== subject)
+            throw new RequestError(
+              409,
+              'The signed-in account changed. Restart this connection from your AI client.',
+            );
         }
         return oauth.consent(
           input.request,
@@ -461,6 +548,7 @@ export function createServerApp(options: ServerOptions) {
         '/advisor',
         '/settings',
         '/connections',
+        '/integrations',
         '/medicine/:id',
       ],
       (_req, res) => res.sendFile(path.join(root, 'index.html')),

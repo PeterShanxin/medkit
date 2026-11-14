@@ -19,7 +19,7 @@ MedKit is a local-first Expo application for responsive Web, iOS, and Android. T
 - Give a local MCP client scoped, expiring, read-only access to an explicitly exported snapshot.
 - Run an optional connected Web server with OAuth-protected HTTP MCP, shared server records, and owner-confirmed change requests. Deploy on [Cloudflare Workers + D1](docs/DEPLOYMENT.md), or use the [local Node server](docs/INTEGRATIONS.md#connected-web-and-http-mcp).
 
-Optional [GitHub sign-in](docs/DEPLOYMENT.md#optional-github-sign-in) opens the same existing connected account on another device. Local mode and backup access keys remain available. Public signup is not enabled.
+Optional [GitHub sign-in](docs/DEPLOYMENT.md#optional-github-sign-in) opens the same connected account on another device. Hosts can invite GitHub users from **Settings → Use MedKit with ChatGPT → Invite people**. Each invited person gets a separate empty account on first sign-in. The same page explains plugin access, permissions and confirmed changes. Local mode and existing backup keys remain available. Public signup is not enabled; MedKit is not listed in the public ChatGPT plugin directory.
 
 The advisor abstains from selecting treatment. No comprehensive drug-interaction database or live model provider is connected.
 

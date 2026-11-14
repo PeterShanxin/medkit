@@ -7,7 +7,7 @@ import {
   reviewSchema,
   type Review,
 } from '../../application/connected/contracts';
-import { connectionRequest } from '../../storage/connected-client';
+import { connectionRequest as request } from '../../storage/connected-client';
 import { startGitHubSignIn } from '../../storage/connection';
 import {
   Button,
@@ -23,7 +23,12 @@ import { PageHeading } from '../Shell';
 import { useRecords } from '../store';
 
 export function ConnectionsScreen() {
-  const { connected, connect, disconnect, refresh, mode } = useRecords();
+  const { state, connected, connect, disconnect, refresh, mode } = useRecords();
+  const subject = connected ? state?.profile.id : undefined;
+  const connectionRequest = useCallback(
+    (path: string, body?: unknown) => request(path, body, subject),
+    [subject],
+  );
   const { review: requestedId, signin } = useLocalSearchParams<{
     review?: string;
     signin?: string;
@@ -58,7 +63,7 @@ export function ConnectionsScreen() {
         setGithubAvailable(parsed.success && parsed.data.githubLogin === true);
       })
       .catch(() => setAvailable(false));
-  }, []);
+  }, [connectionRequest]);
   const load = useCallback(async () => {
     if (!connected) return;
     try {
@@ -76,7 +81,13 @@ export function ConnectionsScreen() {
           : 'Connections could not be refreshed.',
       );
     }
-  }, [connected]);
+  }, [connected, connectionRequest]);
+  useEffect(() => {
+    setSelected(null);
+    setReviews([]);
+    setConnections([]);
+    setMessage('');
+  }, [subject]);
   useEffect(() => {
     void load();
     if (!connected) return;
@@ -107,11 +118,14 @@ export function ConnectionsScreen() {
     <>
       <PageHeading title="Connections" />
       <View style={{ maxWidth: 800, gap: 24 }}>
+        <Link href="/integrations">
+          <Copy>Use MedKit with ChatGPT & other apps →</Copy>
+        </Link>
         {error && <Notice danger>{error}</Notice>}
         {signin === 'failed' && (
           <Notice danger>
             GitHub sign-in was not completed. Try again with the GitHub account
-            linked to this space, or use your backup access key.
+            invited to this MedKit website, or use your backup access key.
           </Notice>
         )}
         {message && <Notice>{message}</Notice>}

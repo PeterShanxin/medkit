@@ -97,7 +97,11 @@ The server has no account recovery UI or key-rotation command. Protect the owner
 
 ### GitHub owner sign-in
 
-An administrator can enable [GitHub sign-in for existing accounts](DEPLOYMENT.md#optional-github-sign-in). GitHub identifies the owner; it does not grant AI access. A signed-out MCP consent page offers GitHub sign-in and returns to the same consent request. Read/write consent and independent owner confirmation still apply. Login requests expire after ten minutes; restart an expired connection from the AI client. Owner keys remain a backup. Public signup and native synchronization are not added.
+An administrator can enable [GitHub sign-in and invited accounts](DEPLOYMENT.md#optional-github-sign-in). GitHub identifies the owner; it does not grant AI access. A signed-out MCP consent page offers GitHub sign-in and returns to the same consent request. Read/write consent and independent owner confirmation still apply. Login requests expire after ten minutes; restart an expired connection from the AI client. Provisioned owner keys remain a backup; invited users sign in through GitHub. Public signup and native synchronization are not added.
+
+### Find the connection guide in MedKit
+
+Open **Settings → Use MedKit with ChatGPT**, or the app guide link in **Connections**. `/integrations` explains sign-in, plugin connection, per-message selection, examples, review links and revocation. It opens the ChatGPT plugin directory; it does not claim to install or publicly list MedKit. An invitation to this MedKit deployment is separate from plugin availability in the user's ChatGPT account/workspace. Hosts must arrange that availability and exact OAuth client callbacks. The expandable connection details also show the current server's MCP endpoint without exposing any credentials.
 
 ### Authorize an AI client
 

@@ -31,7 +31,7 @@ No paid plan, custom domain, CI deployment credential, public signup endpoint, o
 
 ## Optional GitHub sign-in
 
-GitHub can identify an existing MedKit owner without entering an access key on each device. This is separate from Cloudflare dashboard login and MCP consent. Only explicitly mapped numeric GitHub user IDs can sign in. Unmapped users cannot create accounts. No username or email matching is used.
+GitHub identifies MedKit users without entering an access key on each device. This is separate from Cloudflare dashboard login and MCP consent. Configured owners and explicitly invited numeric GitHub user IDs can sign in. Other users cannot create accounts. Usernames are resolved through GitHub when inviting; sign-in uses the immutable numeric ID, not a username or email match.
 
 1. [Register a GitHub OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) with your MedKit HTTPS origin as its homepage and `https://YOUR-MEDKIT-ORIGIN/api/login/github/callback` as its callback. Do not enable device flow.
 2. Obtain the intended GitHub account's numeric ID (for example, `gh api user --jq .id`) and the existing MedKit `subject` from the private provisioning file. Do not copy its `key` into configuration or chat.
@@ -42,6 +42,18 @@ GitHub can identify an existing MedKit owner without entering an access key on e
 The server requests no repository or email scopes. It verifies the current numeric GitHub user ID and discards the provider token. State, PKCE S256, a browser-bound cookie and single-use login requests protect the flow. The resulting MedKit session lasts eight hours. GitHub receives sign-in requests, not health records. Login keeps local records separate. Keep the owner key as a private backup; self-service linking, recovery/key rotation UI and native synchronization are not implemented.
 
 All three settings must be configured together; incomplete configuration fails startup. Leave all three absent for key-only access. Removing a mapping prevents future GitHub logins but does not revoke existing MedKit sessions. Do not log callback query strings or provider credentials. Hourly cleanup removes up to 500 expired GitHub login attempts in addition to the existing session/OAuth cleanup budget.
+
+### Invite-only accounts
+
+To enable host invitation management, add `"admin": true` to the intended existing owner's entry in `MEDKIT_GITHUB_ACCOUNTS_JSON`, then redeploy. This grants invitation management to that MedKit subject, including its backup-key sessions. Other configured owners are not administrators by default. Do not assign this role to guests.
+
+The host signs in and opens **Settings → Use MedKit with ChatGPT → Invite people**. Look up a GitHub username, check the returned profile, then confirm the invitation. This enables access without sending a message. Share the hosted MedKit address with the intended person separately. Their first successful GitHub sign-in atomically creates one empty account. Concurrent logins reuse the same account. There is no public signup or guest access-key generation.
+
+The invitation list contains identities and access status, not health records. The application isolates each person's records, reviews and OAuth grants. Hosting operators still have database access; this is not end-to-end encryption. Invitations are limited to 100 stored entries per deployment, including revoked entries; this is an administrative guard, not a tested user-capacity claim.
+
+Revoking an invited member blocks sign-in, removes their browser sessions, revokes their AI grants and unused authorization codes, and rejects pending changes in one transaction. Their records remain. Previously downloaded/shared copies cannot be recalled. Re-inviting the same numeric GitHub identity restores the same records but does not restore old sessions or grants. Configured owner mappings cannot be changed or revoked through the invitation UI.
+
+A MedKit invitation does not install a ChatGPT plugin or give another ChatGPT account access to the host's private plugin. Arrange client/workspace access separately and register each actual callback. Public directory publication requires its own review and publishing workflow; no public listing or universal installation link is provided by this repository.
 
 ## Connect ChatGPT or another MCP client
 

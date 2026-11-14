@@ -17,6 +17,7 @@ import { z } from 'zod';
 const base = 'http://127.0.0.1:8787';
 const githubSubject = randomUUID();
 const githubRequests: string[] = [];
+let providerGithubId = 12345;
 let mf: Miniflare;
 let runtimeOptions: ConstructorParameters<typeof Miniflare>[0];
 let directory: string;
@@ -109,7 +110,7 @@ beforeAll(async () => {
       MEDKIT_GITHUB_CLIENT_ID: 'synthetic-worker-github',
       MEDKIT_GITHUB_CLIENT_SECRET: 'synthetic-worker-secret',
       MEDKIT_GITHUB_ACCOUNTS_JSON: JSON.stringify([
-        { githubId: '12345', subject: githubSubject },
+        { githubId: '12345', subject: githubSubject, admin: true },
       ]),
       MEDKIT_OAUTH_CLIENTS_JSON: JSON.stringify([
         {
@@ -133,7 +134,13 @@ beforeAll(async () => {
         );
       }
       if (request.url === 'https://api.github.com/user')
-        return new Response(JSON.stringify({ id: 12345 }));
+        return new Response(JSON.stringify({ id: providerGithubId }));
+      if (request.url === 'https://api.github.com/users/synthetic-guest')
+        return Response.json({
+          id: 67890,
+          login: 'synthetic-guest',
+          type: 'User',
+        });
       return new Response('Unexpected outbound request', { status: 502 });
     },
     d1Databases: ['DB'],
@@ -245,6 +252,70 @@ it('completes GitHub browser sign-in through the compiled Worker and rejects cal
   expect(replay.headers.get('location')).toBe(
     base + '/connections?signin=failed',
   );
+});
+it('invites a new GitHub user through the compiled Worker, isolates their account and revokes their session', async () => {
+  const host = await new Identity(db).loginSubject(githubSubject);
+  const headers = {
+    Cookie: `medkit_session=${host.token}`,
+    'CF-Connecting-IP': '192.0.2.46',
+  };
+  const lookup = await request(
+    '/api/members/lookup',
+    { username: 'synthetic-guest' },
+    headers,
+  );
+  expect(lookup.status).toBe(200);
+  expect(
+    (await request('/api/members', await lookup.json(), headers)).status,
+  ).toBe(200);
+  providerGithubId = 67890;
+  try {
+    const start = await request(
+      '/api/login/github',
+      {},
+      { 'CF-Connecting-IP': '192.0.2.47' },
+    );
+    const auth = new URL(
+      ((await start.json()) as { authorizationUrl: string }).authorizationUrl,
+    );
+    const result = await request(
+      '/api/login/github/callback?' +
+        new URLSearchParams({
+          state: auth.searchParams.get('state')!,
+          code: 'synthetic-guest',
+        }),
+      undefined,
+      {
+        Cookie: start.headers.get('set-cookie')!.split(';')[0]!,
+        'CF-Connecting-IP': '192.0.2.47',
+      },
+    );
+    const guestCookie = result.headers
+      .get('set-cookie')!
+      .match(/medkit_session=([^; ,]+)/)![0];
+    const session = await request('/api/session', undefined, {
+      Cookie: guestCookie,
+    });
+    const subject = ((await session.json()) as { subject: string }).subject;
+    expect(subject).not.toBe(githubSubject);
+    expect((await db.records(subject)).state.medicines).toHaveLength(0);
+    expect(
+      (await request('/api/members', undefined, { Cookie: guestCookie }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await request('/api/members/67890/revoke', {}, headers)).status,
+    ).toBe(200);
+    expect(
+      (await request('/api/records', undefined, { Cookie: guestCookie }))
+        .status,
+    ).toBe(401);
+    expect((await request('/api/session', undefined, headers)).status).toBe(
+      200,
+    );
+  } finally {
+    providerGithubId = 12345;
+  }
 });
 it('runs OAuth and real SDK MCP prepare, concurrent owner confirmation, readback and revocation on D1', async () => {
   const tokenResponse = await exchange(await authorize());

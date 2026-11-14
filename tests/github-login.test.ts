@@ -144,7 +144,7 @@ it('rejects an unmapped GitHub identity without creating an account or a session
   s.setProviderId(99999);
   await expect(
     s.login.finish(start.state, start.browser, 'code'),
-  ).rejects.toThrow('not connected');
+  ).rejects.toThrow('needs an invitation');
   expect(await s.db.list('sessions', z.unknown())).toEqual([]);
   expect(await s.db.list('owners', z.unknown())).toHaveLength(1);
 });

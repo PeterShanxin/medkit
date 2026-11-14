@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { idSchema } from '../../src/domain/model';
 import { Database, hash, RequestError, secret } from './database';
 import { Identity } from './identity';
+import { Members } from './members';
 
 const accountSchema = z
   .object({
     githubId: z.string().regex(/^[1-9][0-9]*$/),
     subject: idSchema,
+    admin: z.boolean().optional(),
   })
   .strict();
 export const githubConfigSchema = z
@@ -178,16 +180,11 @@ export class GitHubLogin {
         'GitHub sign-in could not be verified. Start again.',
       );
     }
-    // Numeric provider identity, never a mutable username or an email match. No public signup.
-    const account = this.config.accounts.find(
-      (value) => value.githubId === githubId,
+    // Provider ID binds the invitation to a person even if their username changes.
+    const session = await new Members(this.db, this.config).login(
+      githubId,
+      this.identity,
     );
-    if (!account)
-      throw new RequestError(
-        403,
-        'This GitHub account is not connected to a MedKit space.',
-      );
-    const session = await this.identity.loginSubject(account.subject);
     return { session, returnTo: pending.returnTo };
   }
 }

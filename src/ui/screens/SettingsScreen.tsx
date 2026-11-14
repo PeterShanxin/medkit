@@ -144,6 +144,9 @@ export function SettingsScreen() {
           <Link href="/connections" style={{ marginTop: 16 }}>
             <Copy>Manage connections →</Copy>
           </Link>
+          <Link href="/integrations" style={{ marginTop: 16 }}>
+            <Copy>Use MedKit with ChatGPT →</Copy>
+          </Link>
           <Copy muted size={13} style={{ marginTop: 12 }}>
             Sharing an export gives its recipient a copy. Deleting your records
             here does not delete copies you previously shared.

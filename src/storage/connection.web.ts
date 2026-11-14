@@ -66,7 +66,8 @@ export async function signInConnection(key: string, snapshot?: string) {
     .object({ subject: idSchema })
     .parse(await connectionRequest('login', { key }));
   try {
-    if (snapshot) await connectionRequest('import', JSON.parse(snapshot));
+    if (snapshot)
+      await connectionRequest('import', JSON.parse(snapshot), session.subject);
     localStorage.setItem(storageKey, session.subject);
     notify();
   } catch (error) {

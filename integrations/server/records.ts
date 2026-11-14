@@ -189,12 +189,15 @@ export class Records {
     return reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  async cancelGrant(subject: string, grantId: string) {
+  async cancelGrant(subject: string, grantId?: string) {
     for (const proposal of await this.db.list(
       `proposals:${subject}`,
       savedProposal,
     )) {
-      if (proposal.grantId === grantId && proposal.status === 'pending') {
+      if (
+        (!grantId || proposal.grantId === grantId) &&
+        proposal.status === 'pending'
+      ) {
         await this.db.put(`proposals:${subject}`, proposal.id, {
           ...proposal,
           status: 'rejected',

@@ -40,7 +40,7 @@ const bridge = httpServerHandler({ port: 3000 });
 const dynamic =
   /^(?:\/api(?:\/|$)|\/connect(?:\/|$)|\/mcp(?:\/|$)|\/(?:authorize|token|revoke)(?:\/|$)|\/\.well-known(?:\/|$))/;
 const appRoute =
-  /^(?:\/|\/(?:cabinet|plans|history|advisor|settings|connections)\/?|\/medicine\/[^/]+)$/;
+  /^(?:\/|\/(?:cabinet|plans|history|advisor|settings|connections|integrations)\/?|\/medicine\/[^/]+)$/;
 
 export default {
   async fetch(request, env, ctx) {
@@ -78,12 +78,14 @@ export default {
     // Cloudflare supplies this header. Do not trust X-Forwarded-For from callers.
     const key = hash(request.headers.get('CF-Connecting-IP') ?? 'local');
     const allowed = await env.REQUEST_LIMIT.limit({ key });
-    const login = [
-      '/api/login',
-      '/api/login/github',
-      '/api/login/github/callback',
-      '/connect/approve',
-    ].includes(route);
+    const login =
+      route.startsWith('/api/members') ||
+      [
+        '/api/login',
+        '/api/login/github',
+        '/api/login/github/callback',
+        '/connect/approve',
+      ].includes(route);
     if (
       !allowed.success ||
       (login && !(await env.LOGIN_LIMIT.limit({ key })).success)

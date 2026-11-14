@@ -94,3 +94,11 @@ Live acceptance on 2026-11-15 used Microsoft Edge and the same personal Workers 
 - No health data was entered. No AI client was reauthorized. The temporary local copy of the application secret was removed after successful configuration; the original private owner backup was retained.
 
 This was two sequential live sessions in one Edge profile, not a second physical device test. Independent browser contexts are covered by the automated journeys. ChatGPT's full write/confirmation flow was not repeated with GitHub sign-in; the previous live owner-key acceptance remains a separate result. Native synchronization, account recovery and production CPU capacity remain outside this verification.
+
+## Invited users and connection guide
+
+Local checks on 2026-11-15 used synthetic GitHub identities and records. `npm run verify` passed strict types, formatting, 85 unit/integration tests, the Web build and eleven compiled Worker/D1 tests. iOS and Android JavaScript/Hermes exports also passed; this does not establish native device behavior.
+
+New coverage exercises concurrent first sign-ins creating one account, separate users' records, denial of host operations to guests, verified username-to-ID lookup, stale browser writes and consent after cookie/account switching, actual OAuth token revocation, pending-review rejection, login/revocation races, and re-invitation restoring the original account without reviving tokens. The compiled Worker test performs invitation, GitHub login, authorization denial and revocation against D1.
+
+All 16 desktop/mobile browser journeys passed. New coverage includes the in-app connection guide, host profile lookup and invitation, two isolated guest browser contexts, private-cabinet readback, absent guest invitation controls, and revocation without affecting another user. All identities and provider responses in these checks are synthetic. Live onboarding of a second human, plugin installation in another ChatGPT account/workspace, and public plugin-directory publication remain unverified.
