@@ -135,12 +135,16 @@ beforeAll(async () => {
       }
       if (request.url === 'https://api.github.com/user')
         return new Response(JSON.stringify({ id: providerGithubId }));
-      if (request.url === 'https://api.github.com/users/synthetic-guest')
+      if (request.url === 'https://api.github.com/users/synthetic-guest') {
+        expect(request.headers.get('Authorization')).toBe(
+          `Basic ${Buffer.from('synthetic-worker-github:synthetic-worker-secret').toString('base64')}`,
+        );
         return Response.json({
           id: 67890,
           login: 'synthetic-guest',
           type: 'User',
         });
+      }
       return new Response('Unexpected outbound request', { status: 502 });
     },
     d1Databases: ['DB'],

@@ -270,14 +270,22 @@ export function createServerApp(options: ServerOptions) {
       .object({ username: githubUsernameSchema })
       .strict()
       .parse(req.body);
-    const profile = await lookupGitHubUser(username, options.githubFetch);
+    const profile = await lookupGitHubUser(
+      username,
+      options.github!,
+      options.githubFetch,
+    );
     await host(req);
     res.json(profile);
   });
   app.post('/api/members', sameOrigin, memberLimit, async (req, res) => {
     await host(req);
     const input = memberProfileSchema.strict().parse(req.body);
-    const profile = await lookupGitHubUser(input.login, options.githubFetch);
+    const profile = await lookupGitHubUser(
+      input.login,
+      options.github!,
+      options.githubFetch,
+    );
     if (profile.githubId !== input.githubId)
       throw new RequestError(
         409,

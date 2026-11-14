@@ -130,6 +130,7 @@ export class Members {
 
 export async function lookupGitHubUser(
   username: string,
+  config: Pick<GitHubConfig, 'clientId' | 'clientSecret'>,
   fetcher: typeof fetch = (...args) => fetch(...args),
 ) {
   githubUsernameSchema.parse(username);
@@ -139,6 +140,8 @@ export async function lookupGitHubUser(
       redirect: 'manual',
       signal: AbortSignal.timeout(10_000),
       headers: {
+        // GitHub supports app-authenticated public lookups. Keep credentials in headers on this fixed origin.
+        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
         Accept: 'application/vnd.github+json',
         'User-Agent': 'MedKit',
         'X-GitHub-Api-Version': '2022-11-28',
@@ -147,6 +150,14 @@ export async function lookupGitHubUser(
   );
   if (response.status === 404)
     throw new RequestError(404, 'No GitHub user was found with that username.');
+  if (
+    response.status === 429 ||
+    response.headers.get('x-ratelimit-remaining') === '0'
+  )
+    throw new RequestError(
+      429,
+      'GitHub lookup is temporarily rate limited. Try again later.',
+    );
   if (!response.ok)
     throw new RequestError(
       502,

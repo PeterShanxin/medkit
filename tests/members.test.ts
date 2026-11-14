@@ -5,7 +5,7 @@ import type { Express } from 'express';
 import { z } from 'zod';
 import { openDatabase } from '../integrations/server/sqlite';
 import { Identity } from '../integrations/server/identity';
-import { Members } from '../integrations/server/members';
+import { Members, lookupGitHubUser } from '../integrations/server/members';
 import { createServerApp } from '../integrations/server/app';
 import { medicineInput } from './fixtures';
 import { connectionScopes } from '../src/application/connected/contracts';
@@ -13,6 +13,40 @@ import { ConnectedService } from '../src/storage/connected-client';
 import type { State } from '../src/domain/model';
 
 const cleanups: (() => void | Promise<void>)[] = [];
+it('authenticates public profile lookup only on GitHub and does not follow redirects or retry rate limits', async () => {
+  const config = { clientId: 'synthetic-id', clientSecret: 'synthetic-secret' };
+  const fetcher = vi.fn(async (url: unknown, init?: RequestInit) => {
+    expect(String(url)).toBe('https://api.github.com/users/synthetic-guest');
+    expect(init?.redirect).toBe('manual');
+    expect(new Headers(init?.headers).get('Authorization')).toBe(
+      `Basic ${Buffer.from('synthetic-id:synthetic-secret').toString('base64')}`,
+    );
+    return Response.json({ id: 222, login: 'synthetic-guest', type: 'User' });
+  });
+  expect(await lookupGitHubUser('synthetic-guest', config, fetcher)).toEqual({
+    githubId: '222',
+    login: 'synthetic-guest',
+  });
+  fetcher.mockResolvedValueOnce(
+    new Response(null, {
+      status: 302,
+      headers: { Location: 'https://evil.example' },
+    }),
+  );
+  await expect(
+    lookupGitHubUser('synthetic-guest', config, fetcher),
+  ).rejects.toThrow('could not be checked');
+  fetcher.mockResolvedValueOnce(
+    new Response(null, {
+      status: 403,
+      headers: { 'x-ratelimit-remaining': '0' },
+    }),
+  );
+  await expect(
+    lookupGitHubUser('synthetic-guest', config, fetcher),
+  ).rejects.toThrow('rate limited');
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
 afterEach(async () => {
   vi.unstubAllGlobals();
   for (const clean of cleanups.splice(0).reverse()) await clean();

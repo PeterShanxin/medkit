@@ -97,7 +97,7 @@ This was two sequential live sessions in one Edge profile, not a second physical
 
 ## Invited users and connection guide
 
-Local checks on 2026-11-15 used synthetic GitHub identities and records. `npm run verify` passed strict types, formatting, 85 unit/integration tests, the Web build and eleven compiled Worker/D1 tests. iOS and Android JavaScript/Hermes exports also passed; this does not establish native device behavior.
+Local checks on 2026-11-15 used synthetic GitHub identities and records. `npm run verify` passed strict types, formatting, 86 unit/integration tests, the Web build and eleven compiled Worker/D1 tests. iOS and Android JavaScript/Hermes exports also passed; this does not establish native device behavior.
 
 New coverage exercises concurrent first sign-ins creating one account, separate users' records, denial of host operations to guests, verified username-to-ID lookup, stale browser writes and consent after cookie/account switching, actual OAuth token revocation, pending-review rejection, login/revocation races, and re-invitation restoring the original account without reviving tokens. The compiled Worker test performs invitation, GitHub login, authorization denial and revocation against D1.
 

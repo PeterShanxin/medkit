@@ -49,6 +49,8 @@ To enable host invitation management, add `"admin": true` to the intended existi
 
 The host signs in and opens **Settings → Use MedKit with ChatGPT → Invite people**. Look up a GitHub username, check the returned profile, then confirm the invitation. This enables access without sending a message. Share the hosted MedKit address with the intended person separately. Their first successful GitHub sign-in atomically creates one empty account. Concurrent logins reuse the same account. There is no public signup or guest access-key generation.
 
+Profile lookup uses the OAuth application's credentials server-side for GitHub's public-user API. Credentials stay in the authorization header on the fixed GitHub API origin; redirects are rejected. This adds no repository or email permissions. GitHub rate limits can still temporarily prevent lookup and invitation.
+
 The invitation list contains identities and access status, not health records. The application isolates each person's records, reviews and OAuth grants. Hosting operators still have database access; this is not end-to-end encryption. Invitations are limited to 100 stored entries per deployment, including revoked entries; this is an administrative guard, not a tested user-capacity claim.
 
 Revoking an invited member blocks sign-in, removes their browser sessions, revokes their AI grants and unused authorization codes, and rejects pending changes in one transaction. Their records remain. Previously downloaded/shared copies cannot be recalled. Re-inviting the same numeric GitHub identity restores the same records but does not restore old sessions or grants. Configured owner mappings cannot be changed or revoked through the invitation UI.
