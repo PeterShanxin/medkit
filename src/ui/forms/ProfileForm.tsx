@@ -16,7 +16,7 @@ export function ProfileForm({ onClose }: { onClose(): void }) {
       title="Personal safety context"
       onClose={onClose}
       submitLabel="Save context"
-      onSubmit={(operationId) =>
+      onSubmit={(edit) =>
         run(
           [
             {
@@ -36,7 +36,7 @@ export function ProfileForm({ onClose }: { onClose(): void }) {
               },
             },
           ],
-          operationId,
+          edit,
         )
       }
     >

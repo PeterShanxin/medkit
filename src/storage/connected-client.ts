@@ -4,7 +4,7 @@ import {
   type ConnectedRecords,
 } from '../application/connected/contracts';
 import type { Mutation } from '../domain/commands';
-import type { RecordStore } from '../application/service';
+import type { RecordEdit, RecordStore } from '../application/service';
 import { validateState } from '../domain/invariants';
 import { exportSchema, type State } from '../domain/model';
 
@@ -57,6 +57,7 @@ export async function connectionRequest(
 }
 export class ConnectedService {
   private current: ConnectedRecords | null = null;
+  private versions = new WeakMap<State, number>();
   syncError = '';
   private closed = false;
   constructor(
@@ -72,6 +73,7 @@ export class ConnectedService {
         'The connected account does not match. Sign out and reconnect.',
       );
     this.current = value;
+    this.versions.set(value.state, value.version);
     this.syncError = '';
     try {
       await this.cache.transact(() => value.state);
@@ -98,12 +100,52 @@ export class ConnectedService {
     }
   }
   async execute(mutation: Mutation): Promise<State> {
-    if (!this.current)
+    return this.send(mutation, this.current?.version);
+  }
+  beginEdit(operationId: string, snapshot = this.current?.state): RecordEdit {
+    // Bind the form to the records it displayed, even when background reads advance.
+    const version = snapshot ? this.versions.get(snapshot) : undefined;
+    let pending: Mutation | undefined;
+    let uncertain = false;
+    return {
+      execute: async (commands) => {
+        if (this.closed) throw new Error('This connected session has ended.');
+        if (version === undefined)
+          throw new Error(
+            'Refresh connected records and reopen this form before saving.',
+          );
+        pending ??= structuredClone({ operationId, commands });
+        try {
+          return await this.send(pending, version);
+        } catch (error) {
+          if (
+            !uncertain &&
+            error instanceof ConnectionError &&
+            error.status >= 400 &&
+            error.status < 500
+          ) {
+            pending = undefined;
+            throw error;
+          }
+          uncertain = true;
+          throw new Error(
+            'Save status is unknown. Retry to check the original submission. Later edits will not be sent. Review your records before starting another entry.',
+          );
+        }
+      },
+    };
+  }
+  private async send(
+    mutation: Mutation,
+    version: number | undefined,
+  ): Promise<State> {
+    if (this.closed) throw new Error('This connected session has ended.');
+    if (version === undefined)
       throw new Error('Refresh connected records before saving a change.');
     return this.accept(
       await connectionRequest('records', {
         ...mutation,
-        version: this.current.version,
+        version,
       }),
     );
   }

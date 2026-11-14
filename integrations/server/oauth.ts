@@ -343,8 +343,14 @@ export class OAuth implements OAuthServerProvider {
     this.db.put('oauth-grants', id, { ...grant, revoked: true });
   }
   revokeAll(subject: string) {
-    for (const g of this.db.list('oauth-grants', grantSchema))
-      if (g.subject === subject) this.revoke(g.id, subject);
+    this.db.atomic(() => {
+      this.db.removeWhere(
+        'oauth-codes',
+        (value) => codeSchema.parse(value).subject === subject,
+      );
+      for (const g of this.db.list('oauth-grants', grantSchema))
+        if (g.subject === subject) this.revoke(g.id, subject);
+    });
   }
   list(subject: string) {
     return this.db

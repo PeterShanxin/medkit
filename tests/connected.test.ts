@@ -384,6 +384,29 @@ describe('OAuth and HTTP MCP', () => {
     expect((await s.exchange(fields)).status).toBe(200);
     expect((await s.exchange(fields)).status).toBe(400);
   });
+  it('invalidates unexchanged codes on record deletion without revoking another account', async () => {
+    const s = await setup();
+    const deleted = await s.authorization();
+    const other = await s.authorization(connectionScopes, s.b.key);
+    const cookie = await s.login();
+    const erased = await s.request(
+      '/api/erase',
+      { version: s.db.records(s.a.subject).version },
+      { cookie },
+    );
+    expect(erased.status).toBe(200);
+    const fields = (c: typeof deleted) => ({
+      grant_type: 'authorization_code',
+      code: c.code,
+      code_verifier: c.verifier,
+      redirect_uri: 'http://127.0.0.1/callback',
+    });
+    expect((await s.exchange(fields(deleted))).status).toBe(400);
+    expect((await s.exchange(fields(other))).status).toBe(200);
+    expect(s.oauth.list(s.a.subject)).toHaveLength(0);
+    const fresh = await s.authorization();
+    expect((await s.exchange(fields(fresh))).status).toBe(200);
+  });
   it('runs real HTTP MCP prepare, owner confirmation, status, and readback without duplicate deductions', async () => {
     const s = await setup();
     const tokens = await s.tokens();

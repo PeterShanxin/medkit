@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
-import { MedkitService } from '../application/service';
+import { MedkitService, type RecordEdit } from '../application/service';
 import { createDemo } from '../application/demo';
 import { type Command } from '../domain/commands';
 import { emptyState, type State } from '../domain/model';
@@ -30,7 +30,8 @@ interface StoreContext {
   mode: State['dataset'];
   setMode(mode: State['dataset']): void;
   refresh(): Promise<void>;
-  run(commands: Command[], operationId?: string): Promise<void>;
+  beginEdit(operationId: string): RecordEdit;
+  run(commands: Command[], edit?: RecordEdit): Promise<void>;
   exportRecords(): Promise<string>;
   erase(): Promise<void>;
   connected: boolean;
@@ -143,12 +144,23 @@ function SessionProvider({
     return () => clearInterval(timer);
   }, [service, refresh]);
 
-  const run = async (commands: Command[], operationId = uuid()) => {
+  const beginEdit = (operationId: string): RecordEdit => {
+    if (!service)
+      return {
+        execute: async () => {
+          throw new Error(
+            'Records are still loading. Reopen this form shortly.',
+          );
+        },
+      };
+    return service.beginEdit(operationId, state ?? undefined);
+  };
+  const run = async (commands: Command[], edit = beginEdit(uuid())) => {
     if (!service)
       throw new Error('Records are still loading. Try again shortly.');
     setBusy(true);
     try {
-      setState(await service.execute({ operationId, commands }));
+      setState(await edit.execute(commands));
       setError(service instanceof ConnectedService ? service.syncError : '');
       channel?.postMessage('changed');
     } finally {
@@ -175,6 +187,7 @@ function SessionProvider({
         setMode,
         refresh,
         run,
+        beginEdit,
         erase,
         connected: service instanceof ConnectedService,
         connect: async (key, upload) => {

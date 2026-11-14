@@ -188,3 +188,112 @@ test('connected medicine record, human review, reload, offline cache and revocat
     db.close();
   }
 });
+
+test('connected forms recover a lost response and reject edits from an older version', async ({
+  page,
+}) => {
+  const db = new Database(':memory:');
+  let app: Express;
+  const listener = createServer((req, res) => app(req, res));
+  await new Promise<void>((resolve) =>
+    listener.listen(0, '127.0.0.1', resolve),
+  );
+  const base = `http://127.0.0.1:${(listener.address() as { port: number }).port}`;
+  const services = createServerApp({
+    db,
+    baseUrl: base,
+    webRoot: 'dist',
+    clients: [],
+  });
+  app = services.app;
+  const account = services.identity.provision();
+  const data = fixture();
+  services.records.import(account.subject, {
+    format: 'medkit',
+    exportedAt: now,
+    state: data.state,
+  });
+  try {
+    await page.goto(base + '/connections');
+    await page.getByLabel('Access key', { exact: true }).fill(account.key);
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(
+      page.getByText('Connected space', { exact: true }),
+    ).toBeVisible();
+    await page.goto(base + '/medicine/' + data.medicineId);
+    await page
+      .getByRole('button', { name: 'Record a dose', exact: true })
+      .click();
+    await page.getByLabel('Amount (tablet)', { exact: true }).fill('1');
+    let first = true;
+    const payloads: unknown[] = [];
+    await page.route(base + '/api/records', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      payloads.push(route.request().postDataJSON());
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      if (first) {
+        first = false;
+        await route.abort('failed');
+      } else await route.fulfill({ response });
+    });
+    await page
+      .getByRole('button', { name: 'Confirm dose taken', exact: true })
+      .click();
+    await expect(page.getByText(/Save status is unknown/)).toBeVisible();
+    expect(db.records(account.subject).state.batches[0]!.quantity).toBe(9);
+    await page
+      .getByRole('button', { name: 'Confirm dose taken', exact: true })
+      .click();
+    await expect(page.getByText(/Save status is unknown/)).toHaveCount(0);
+    expect(payloads).toHaveLength(2);
+    expect(payloads[1]).toEqual(payloads[0]);
+    expect(db.records(account.subject).state.doses).toHaveLength(1);
+    await page.unroute(base + '/api/records');
+
+    await page
+      .getByRole('button', { name: 'Edit medicine', exact: true })
+      .click();
+    await page
+      .getByLabel('Generic or Chinese name (optional)')
+      .fill('My stale edit');
+    const current = db.records(account.subject);
+    services.records.execute(account.subject, {
+      operationId: randomUUID(),
+      version: current.version,
+      commands: [
+        {
+          type: 'medicine.save',
+          id: data.medicineId,
+          data: {
+            ...current.state.medicines[0]!,
+            genericName: 'Corrected on another device',
+          },
+        },
+      ],
+    });
+    // Exercise the real background refresh while the form retains its initial values.
+    const refreshed = page.waitForResponse(
+      (r) =>
+        r.url() === base + '/api/records' && r.request().method() === 'GET',
+    );
+    await page.evaluate(() => {
+      const channel = new BroadcastChannel('medkit-personal');
+      channel.postMessage('changed');
+      channel.close();
+    });
+    await refreshed;
+    await page
+      .getByRole('button', { name: 'Save medicine', exact: true })
+      .click();
+    await expect(
+      page.getByText('Records changed. Refresh and review the change again.'),
+    ).toBeVisible();
+    expect(db.records(account.subject).state.medicines[0]!.genericName).toBe(
+      'Corrected on another device',
+    );
+  } finally {
+    await new Promise<void>((resolve) => listener.close(() => resolve()));
+    db.close();
+  }
+});

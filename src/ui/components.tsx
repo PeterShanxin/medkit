@@ -1,5 +1,5 @@
 import { Pressable } from './interaction';
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import { ZodError } from 'zod';
 import { fonts, useTheme } from './theme';
 import { hasConnection } from '../storage/connection';
 import { useRecords, uuid } from './store';
+import type { RecordEdit } from '../application/service';
 
 export function Copy({
   children,
@@ -403,13 +404,13 @@ export function FormDialog({
 }: React.PropsWithChildren<{
   title: string;
   onClose(): void;
-  onSubmit(operationId: string): Promise<void>;
+  onSubmit(edit: RecordEdit): Promise<void>;
   submitLabel?: string;
   destructive?: boolean;
 }>) {
   const t = useTheme();
-  const { busy } = useRecords();
-  const operationId = useRef(uuid());
+  const { busy, beginEdit } = useRecords();
+  const [edit] = useState(() => beginEdit(uuid()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const submit = async () => {
@@ -417,7 +418,7 @@ export function FormDialog({
     setSaving(true);
     setError('');
     try {
-      await onSubmit(operationId.current);
+      await onSubmit(edit);
       onClose();
     } catch (cause) {
       setError(

@@ -1,4 +1,4 @@
-import { type Mutation } from '../domain/commands';
+import { type Command, type Mutation } from '../domain/commands';
 import { validateState } from '../domain/invariants';
 import { exportSchema, type State } from '../domain/model';
 import { transition } from '../domain/transition';
@@ -8,6 +8,10 @@ export interface RecordStore {
   transact(update: (current: State | null) => State): Promise<State>;
   clear(): Promise<void>;
   close(): void;
+}
+
+export interface RecordEdit {
+  execute(commands: Command[]): Promise<State>;
 }
 
 export function applyRecordMutation(
@@ -34,6 +38,9 @@ export class MedkitService {
     return this.store.transact((value) =>
       applyRecordMutation(value ?? this.initial(), mutation, this.clock()),
     );
+  }
+  beginEdit(operationId: string, _snapshot?: State | null): RecordEdit {
+    return { execute: (commands) => this.execute({ operationId, commands }) };
   }
   async export(): Promise<string> {
     return JSON.stringify(

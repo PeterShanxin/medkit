@@ -67,7 +67,7 @@ export function MedicineForm({
       title={medicine ? 'Edit medicine' : 'Add medicine'}
       onClose={onClose}
       submitLabel={medicine ? 'Save medicine' : 'Add to cabinet'}
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         const id = medicine?.id ?? uuid();
         const commands: Command[] = [
           {
@@ -113,7 +113,7 @@ export function MedicineForm({
           throw new Error(
             'Enter the quantity, including zero if the pack is empty.',
           );
-        await run(commands, operationId);
+        await run(commands, edit);
       }}
     >
       <Field
@@ -339,7 +339,7 @@ export function BatchForm({
       title={batch ? 'Edit batch details' : 'Add a batch'}
       onClose={onClose}
       submitLabel={batch ? 'Save batch' : 'Add batch'}
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         if (!batch && !quantity.trim()) throw new Error('Enter a quantity.');
         if (!low.trim())
           throw new Error(
@@ -365,7 +365,7 @@ export function BatchForm({
                   },
                 },
           ],
-          operationId,
+          edit,
         );
       }}
     >

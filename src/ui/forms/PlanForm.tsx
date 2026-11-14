@@ -29,7 +29,7 @@ export function PlanForm({
       title="Add medication plan"
       submitLabel="Save plan"
       onClose={onClose}
-      onSubmit={async (operationId) => {
+      onSubmit={async (edit) => {
         if (!medicine) throw new Error('Add a medicine to your cabinet first.');
         await run(
           [
@@ -53,7 +53,7 @@ export function PlanForm({
               },
             },
           ],
-          operationId,
+          edit,
         );
       }}
     >
